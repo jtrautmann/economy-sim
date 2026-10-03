@@ -100,6 +100,9 @@
     .log-entry.production {
         color: #34c759;
     }
+    .log-entry.consumption {
+        color: #a2845c;
+    }
     .log-entry.trade {
         color: #007aff;
     }
@@ -185,10 +188,9 @@
                     <tr>
                         <th>Name</th>
                         <th>Beruf</th>
-                        <th>Produziert</th>
                         <th>Geld</th>
                         <th>Lager</th>
-                        <th>Erfüllt</th>
+                        <th>Bedarf erfüllt</th>
                     </tr>
                 </thead>
                 <tbody id="people"></tbody>
@@ -204,7 +206,7 @@
     ==========================================
 */
 
-/* Preise für alle Produkte/Rohstoffe */
+/* Preise für alle Produkte */
 const prices = {
     Getreide: 2,
     Brot: 5,
@@ -212,40 +214,59 @@ const prices = {
     Holz: 3,
     Möbel: 25,
     Fisch: 6,
-    Geschirr: 8
-};
-
-/* Produktionsmenge pro Tag */
-const production = {
-    Bauer: 3,
-    Bäcker: 2,
-    Schneider: 1,
-    Holzfäller: 3,
-    Zimmermann: 1,
-    Fischer: 2,
-    Töpfer: 1
+    Geschirr: 8,
+    Leinen: 4,
+    Wolle: 3
 };
 
 /*
-    Rohstoffe, die für die Produktion nötig sind
-    job -> [Liste der Rohstoffe, die gekauft werden müssen]
+    Produktionsrezepte: job -> { output: Produktname, outputAmount: Anzahl, inputs: { Rohstoff: Menge } }
 */
-const rawMaterials = {
-    Bauer: [],           /* Bauer braucht keine Rohstoffe */
-    Bäcker: ["Getreide"], /* Bäcker braucht Getreide um Brot zu machen */
-    Schneider: [],       /* Schneider hat Rohstoffe selbst? */
-    Holzfäller: [],      /* Holzfäller braucht keine Rohstoffe */
-    Zimmermann: ["Holz"], /* Zimmermann braucht Holz um Möbel zu machen */
-    Fischer: [],         /* Fischer braucht keine Rohstoffe */
-    Töpfer: []          /* Töpfer hat Rohstoffe selbst? */
+const productionRecipes = {
+    Bauer: {
+        output: "Getreide",
+        outputAmount: 3,
+        inputs: {}  /* Bauer braucht keine Rohstoffe */
+    },
+    Bäcker: {
+        output: "Brot",
+        outputAmount: 2,
+        inputs: { Getreide: 1 }  /* 1 Getreide -> 2 Brot */
+    },
+    Schneider: {
+        output: "Kleidung",
+        outputAmount: 1,
+        inputs: { Wolle: 1 }  /* 1 Wolle -> 1 Kleidung */
+    },
+    Holzfäller: {
+        output: "Holz",
+        outputAmount: 3,
+        inputs: {}  /* Holzfäller braucht keine Rohstoffe */
+    },
+    Zimmermann: {
+        output: "Möbel",
+        outputAmount: 1,
+        inputs: { Holz: 2 }  /* 2 Holz -> 1 Möbel */
+    },
+    Fischer: {
+        output: "Fisch",
+        outputAmount: 2,
+        inputs: {}  /* Fischer braucht keine Rohstoffe */
+    },
+    Töpfer: {
+        output: "Geschirr",
+        outputAmount: 1,
+        inputs: {}  /* Töpfer braucht keine Rohstoffe */
+    },
+    Schäfer: {
+        output: "Wolle",
+        outputAmount: 2,
+        inputs: {}  /* Schäfer braucht keine Rohstoffe */
+    }
 };
 
 /*
     Universelle Bedürfnisse aller Bewohner
-    Jeder Bewohner braucht täglich:
-    - Lebensmittel (Brot oder Fisch)
-    - Kleidung
-    - Haushaltsware (Geschirr oder Möbel)
 */
 const universalNeeds = [
     { category: "Lebensmittel", options: ["Brot", "Fisch"] },
@@ -257,21 +278,20 @@ const universalNeeds = [
     Jede Person hat:
     Name
     Beruf
-    Produkt (was sie herstellt)
 */
 const initialPeople = [
-    { name: "Anna", job: "Bauer", product: "Getreide" },
-    { name: "Ben", job: "Bäcker", product: "Brot" },
-    { name: "Clara", job: "Schneider", product: "Kleidung" },
-    { name: "David", job: "Schneider", product: "Kleidung" },
-    { name: "Emma", job: "Holzfäller", product: "Holz" },
-    { name: "Felix", job: "Zimmermann", product: "Möbel" },
-    { name: "Greta", job: "Fischer", product: "Fisch" },
-    { name: "Hans", job: "Töpfer", product: "Geschirr" },
-    { name: "Ida", job: "Bauer", product: "Getreide" },
-    { name: "Jonas", job: "Bäcker", product: "Brot" },
-    { name: "Klara", job: "Fischer", product: "Fisch" },
-    { name: "Leo", job: "Schneider", product: "Kleidung" }
+    { name: "Anna", job: "Bauer" },
+    { name: "Ben", job: "Bäcker" },
+    { name: "Clara", job: "Schneider" },
+    { name: "David", job: "Schäfer" },
+    { name: "Emma", job: "Holzfäller" },
+    { name: "Felix", job: "Zimmermann" },
+    { name: "Greta", job: "Fischer" },
+    { name: "Hans", job: "Töpfer" },
+    { name: "Ida", job: "Bauer" },
+    { name: "Jonas", job: "Bäcker" },
+    { name: "Klara", job: "Fischer" },
+    { name: "Leo", job: "Schneider" }
 ];
 
 /*
@@ -294,9 +314,8 @@ function createInitialState() {
                 id: index,
                 name: person.name,
                 job: person.job,
-                product: person.product,
                 money: 100,
-                stock: {},
+                stock: {},  /* Lager: { Produktname: Anzahl } */
                 needsFulfilled: {
                     "Lebensmittel": false,
                     "Kleidung": false,
@@ -316,6 +335,17 @@ function formatMoney(value) {
     return Math.round(value).toLocaleString("de-DE") + " ₰";
 }
 
+function getStockText(stock) {
+    return Object.entries(stock)
+        .filter(function(entry) {
+            return entry[1] > 0;
+        })
+        .map(function(entry) {
+            return entry[0] + " ×" + entry[1];
+        })
+        .join(", ");
+}
+
 /*
     ==========================================
     ROHSTOFFKAUF (vor Produktion)
@@ -323,49 +353,72 @@ function formatMoney(value) {
 */
 function buyRawMaterials() {
     state.people.forEach(function(producer) {
-        const neededMaterials = rawMaterials[producer.job] || [];
+        const recipe = productionRecipes[producer.job];
+        if (!recipe) return;
         
-        neededMaterials.forEach(function(material) {
-            /* Rohstoff kaufen, wenn nötig */
-            if ((producer.stock[material] || 0) <= 0) {
-                /* Suche Verkäufer */
-                const seller = state.people.find(function(person) {
-                    return (
-                        person.id !== producer.id &&
-                        person.product === material &&
-                        (person.stock[material] || 0) > 0
-                    );
-                });
+        const requiredInputs = recipe.inputs;
+        
+        Object.keys(requiredInputs).forEach(function(material) {
+            const neededAmount = requiredInputs[material];
+            const currentStock = producer.stock[material] || 0;
+            
+            /* Kaufe nur, wenn nicht genug im Lager */
+            if (currentStock < neededAmount) {
+                const amountToBuy = neededAmount - currentStock;
                 
-                if (seller) {
-                    const price = prices[material];
-                    if (producer.money >= price) {
-                        /* Kauf durchführen */
-                        producer.money -= price;
-                        seller.money += price;
-                        
-                        seller.stock[material]--;
-                        if (!producer.stock[material]) {
-                            producer.stock[material] = 0;
-                        }
-                        producer.stock[material]++;
-                        
-                        state.log.push(
-                            "⚙️  " +
-                            producer.name +
-                            " (" +
-                            producer.job +
-                            ") kauft 1× " +
-                            material +
-                            " von " +
-                            seller.name +
-                            " für " +
-                            price +
-                            " ₰"
+                for (let i = 0; i < amountToBuy; i++) {
+                    /* Suche Verkäufer */
+                    const seller = state.people.find(function(person) {
+                        const sellerRecipe = productionRecipes[person.job];
+                        return (
+                            person.id !== producer.id &&
+                            sellerRecipe &&
+                            sellerRecipe.output === material &&
+                            (person.stock[material] || 0) > 0
                         );
-                        
-                        state.transactionsToday++;
+                    });
+                    
+                    if (!seller) {
+                        state.log.push(
+                            "❌ " +
+                            producer.name +
+                            " konnte 1× " +
+                            material +
+                            " nicht kaufen (nicht verfügbar)"
+                        );
+                        continue;
                     }
+                    
+                    const price = prices[material];
+                    if (producer.money < price) {
+                        state.log.push(
+                            "💸 " +
+                            producer.name +
+                            " hat nicht genug Geld für " +
+                            material
+                        );
+                        continue;
+                    }
+                    
+                    /* Kauf durchführen */
+                    producer.money -= price;
+                    seller.money += price;
+                    seller.stock[material]--;
+                    producer.stock[material] = (producer.stock[material] || 0) + 1;
+                    
+                    state.log.push(
+                        "⚙️  " +
+                        producer.name +
+                        " kauft 1× " +
+                        material +
+                        " von " +
+                        seller.name +
+                        " für " +
+                        price +
+                        " ₰"
+                    );
+                    
+                    state.transactionsToday++;
                 }
             }
         });
@@ -379,36 +432,56 @@ function buyRawMaterials() {
 */
 function produceGoods() {
     state.people.forEach(function(person) {
-        const neededMaterials = rawMaterials[person.job] || [];
-        const amount = production[person.job] || 0;
+        const recipe = productionRecipes[person.job];
+        if (!recipe) return;
         
-        /* Nur produzieren, wenn alle Rohstoffe vorhanden sind */
+        const requiredInputs = recipe.inputs;
+        
+        /* Überprüfe, ob alle Rohstoffe vorhanden sind */
         let canProduce = true;
-        neededMaterials.forEach(function(material) {
-            if ((person.stock[material] || 0) <= 0) {
+        Object.keys(requiredInputs).forEach(function(material) {
+            const needed = requiredInputs[material];
+            const available = person.stock[material] || 0;
+            if (available < needed) {
                 canProduce = false;
             }
         });
         
         if (!canProduce) {
+            const missingItems = Object.keys(requiredInputs)
+                .filter(function(material) {
+                    return (person.stock[material] || 0) < requiredInputs[material];
+                })
+                .map(function(material) {
+                    return material + " ×" + requiredInputs[material];
+                })
+                .join(", ");
+            
             state.log.push(
                 "⛔ " +
                 person.name +
-                " kann nicht produzieren: Rohstoffe fehlen"
+                " kann nicht produzieren: " +
+                missingItems +
+                " fehlt"
             );
             return;
         }
         
-        /* Rohstoffe verbrauchen */
-        neededMaterials.forEach(function(material) {
-            person.stock[material]--;
+        /* Verbrauche Rohstoffe */
+        Object.keys(requiredInputs).forEach(function(material) {
+            person.stock[material] -= requiredInputs[material];
         });
         
-        /* Produkt herstellen */
-        if (!person.stock[person.product]) {
-            person.stock[person.product] = 0;
-        }
-        person.stock[person.product] += amount;
+        /* Produziere Waren */
+        const output = recipe.output;
+        const outputAmount = recipe.outputAmount;
+        person.stock[output] = (person.stock[output] || 0) + outputAmount;
+        
+        const inputsText = Object.keys(requiredInputs).length > 0
+            ? Object.keys(requiredInputs)
+                .map(function(m) { return m + " ×" + requiredInputs[m]; })
+                .join(" + ")
+            : "nichts";
         
         state.log.push(
             "📦 " +
@@ -416,9 +489,11 @@ function produceGoods() {
             " (" +
             person.job +
             ") produziert " +
-            amount +
+            outputAmount +
             "× " +
-            person.product
+            output +
+            " aus " +
+            inputsText
         );
     });
 }
@@ -446,7 +521,6 @@ function consumeGoods() {
                 const seller = state.people.find(function(person) {
                     return (
                         person.id !== buyer.id &&
-                        person.product === desiredProduct &&
                         (person.stock[desiredProduct] || 0) > 0
                     );
                 });
@@ -460,15 +534,7 @@ function consumeGoods() {
                 buyer.money -= price;
                 seller.money += price;
                 seller.stock[desiredProduct]--;
-                
-                if (!buyer.stock[desiredProduct]) {
-                    buyer.stock[desiredProduct] = 0;
-                }
-                buyer.stock[desiredProduct]++;
-                
-                /* Sofort konsumieren */
-                buyer.stock[desiredProduct]--;
-                buyer.needsFulfilled[need.category] = true;
+                buyer.stock[desiredProduct] = (buyer.stock[desiredProduct] || 0) + 1;
                 
                 state.log.push(
                     "💳 " +
@@ -482,6 +548,17 @@ function consumeGoods() {
                     " ₰"
                 );
                 
+                /* Sofort konsumieren */
+                buyer.stock[desiredProduct]--;
+                
+                state.log.push(
+                    "🍽️  " +
+                    buyer.name +
+                    " verbraucht 1× " +
+                    desiredProduct
+                );
+                
+                buyer.needsFulfilled[need.category] = true;
                 state.transactionsToday++;
                 bought = true;
             });
@@ -507,7 +584,7 @@ function nextDay() {
     });
     
     /*
-        1. Rohstoffkauf
+        1. Rohstoffkauf (Produzenten kaufen Rohstoffe)
     */
     buyRawMaterials();
     
@@ -517,7 +594,7 @@ function nextDay() {
     produceGoods();
     
     /*
-        3. Konsum (Handel)
+        3. Konsum (Handel für Bedarf)
     */
     consumeGoods();
     
@@ -555,32 +632,36 @@ function renderMarket() {
     const market = document.getElementById("market");
     const inventory = {};
     state.people.forEach(function(person) {
-        const product = person.product;
-        const amount = person.stock[product] || 0;
-        if (!inventory[product]) {
-            inventory[product] = 0;
-        }
-        inventory[product] += amount;
+        Object.keys(person.stock).forEach(function(product) {
+            const amount = person.stock[product];
+            if (amount > 0) {
+                if (!inventory[product]) {
+                    inventory[product] = 0;
+                }
+                inventory[product] += amount;
+            }
+        });
     });
     market.innerHTML = "";
     Object.keys(prices).forEach(function(product) {
-        const row = document.createElement("div");
-        row.className = "row";
-        const name = document.createElement("span");
-        name.innerHTML =
-            "<strong>" +
-            product +
-            "</strong> " +
-            '<span class="muted">· ' +
-            prices[product] +
-            " ₰</span>";
-        const amount = document.createElement("span");
-        amount.textContent =
-            (inventory[product] || 0) +
-            " Stück";
-        row.appendChild(name);
-        row.appendChild(amount);
-        market.appendChild(row);
+        const amount = inventory[product] || 0;
+        if (amount > 0) {
+            const row = document.createElement("div");
+            row.className = "row";
+            const name = document.createElement("span");
+            name.innerHTML =
+                "<strong>" +
+                product +
+                "</strong> " +
+                '<span class="muted">· ' +
+                prices[product] +
+                " ₰</span>";
+            const amountSpan = document.createElement("span");
+            amountSpan.textContent = amount + " Stück";
+            row.appendChild(name);
+            row.appendChild(amountSpan);
+            market.appendChild(row);
+        }
     });
 }
 
@@ -594,15 +675,8 @@ function renderPeople() {
     tbody.innerHTML = "";
     state.people.forEach(function(person) {
         const row = document.createElement("tr");
-        const stockText = Object.entries(person.stock)
-            .filter(function(entry) {
-                return entry[1] > 0;
-            })
-            .map(function(entry) {
-                return entry[0] + " ×" + entry[1];
-            })
-            .join(", ");
         
+        const stockText = getStockText(person.stock);
         const needsFulfilledCount = Object.values(person.needsFulfilled).filter(Boolean).length;
         const needsStatus = needsFulfilledCount + "/3";
         
@@ -614,12 +688,9 @@ function renderPeople() {
             person.job +
             "</td>" +
             "<td>" +
-            person.product +
-            "</td>" +
-            "<td>" +
             formatMoney(person.money) +
             "</td>" +
-            "<td>" +
+            "<td style='font-size: 12px;'>" +
             (stockText || "–") +
             "</td>" +
             "<td>" +
@@ -640,7 +711,7 @@ function renderLog() {
     state.log
         .slice()
         .reverse()
-        .slice(0, 15)
+        .slice(0, 20)
         .forEach(function(message) {
             const entry = document.createElement("div");
             entry.className = "log-entry";
@@ -650,6 +721,8 @@ function renderLog() {
                 entry.className += " rawmaterial";
             } else if (message.startsWith("📦")) {
                 entry.className += " production";
+            } else if (message.startsWith("🍽️")) {
+                entry.className += " consumption";
             } else if (message.startsWith("💳")) {
                 entry.className += " trade";
             } else if (message.startsWith("📊")) {
