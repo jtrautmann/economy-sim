@@ -8,9 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Dorfwirtschaft">
 <title>Dorfwirtschaft – Prototyp</title>
 <style>
-    * {
-        box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
     body {
         margin: 0;
         padding: 16px;
@@ -18,17 +16,9 @@
         background: #f2f2f7;
         color: #1c1c1e;
     }
-    .container {
-        max-width: 900px;
-        margin: 0 auto;
-    }
-    h1 {
-        margin-bottom: 4px;
-    }
-    .subtitle {
-        color: #6e6e73;
-        margin-top: 0;
-    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { margin-bottom: 4px; }
+    .subtitle { color: #6e6e73; margin-top: 0; }
     .stats {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -41,15 +31,8 @@
         padding: 16px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
-    .stat-label {
-        color: #6e6e73;
-        font-size: 14px;
-    }
-    .stat-value {
-        font-size: 26px;
-        font-weight: 700;
-        margin-top: 4px;
-    }
+    .stat-label { color: #6e6e73; font-size: 14px; }
+    .stat-value { font-size: 26px; font-weight: 700; margin-top: 4px; }
     button {
         appearance: none;
         border: none;
@@ -63,28 +46,17 @@
         margin-right: 8px;
         margin-bottom: 8px;
     }
-    button.secondary {
-        background: #e5e5ea;
-        color: #1c1c1e;
-    }
-    button:active {
-        transform: scale(0.98);
-    }
-    .section-title {
-        margin-top: 0;
-    }
+    button.secondary { background: #e5e5ea; color: #1c1c1e; }
+    button:active { transform: scale(0.98); }
+    .section-title { margin-top: 0; }
     .row {
         display: flex;
         justify-content: space-between;
         padding: 10px 0;
         border-bottom: 1px solid #e5e5ea;
     }
-    .row:last-child {
-        border-bottom: none;
-    }
-    .muted {
-        color: #6e6e73;
-    }
+    .row:last-child { border-bottom: none; }
+    .muted { color: #6e6e73; }
     .log {
         max-height: 250px;
         overflow-y: auto;
@@ -94,64 +66,39 @@
         padding: 7px 0;
         border-bottom: 1px solid #e5e5ea;
     }
-    .log-entry.rawmaterial {
-        color: #ff9500;
-    }
-    .log-entry.production {
-        color: #34c759;
-    }
-    .log-entry.consumption {
-        color: #a2845c;
-    }
-    .log-entry.trade {
-        color: #007aff;
-    }
-    .log-entry.error {
-        color: #ff3b30;
-    }
-    .log-entry.summary {
-        color: #6e6e73;
-        font-weight: 500;
-    }
-    .table-wrapper {
-        overflow-x: auto;
-    }
+    .log-entry.rawmaterial { color: #ff9500; }
+    .log-entry.production { color: #34c759; }
+    .log-entry.consumption { color: #a2845c; }
+    .log-entry.trade { color: #007aff; }
+    .log-entry.error { color: #ff3b30; }
+    .log-entry.summary { color: #6e6e73; font-weight: 500; }
+    .table-wrapper { overflow-x: auto; }
     table {
         width: 100%;
         border-collapse: collapse;
         font-size: 14px;
     }
-    th,
-    td {
+    th, td {
         text-align: left;
         padding: 9px 8px;
         border-bottom: 1px solid #e5e5ea;
         white-space: nowrap;
     }
-    th {
-        color: #6e6e73;
-    }
+    th { color: #6e6e73; }
     @media (min-width: 600px) {
-        .stats {
-            grid-template-columns: repeat(4, 1fr);
-        }
+        .stats { grid-template-columns: repeat(4, 1fr); }
     }
 </style>
 </head>
 <body>
 <div class="container">
     <h1>🏡 Dorf Sonnenfeld</h1>
-    <p class="subtitle">
-        Kleine Wirtschaftssimulation
-    </p>
+    <p class="subtitle">Kleine Wirtschaftssimulation</p>
     <div>
-        <button id="nextDay">
-            ▶ Nächster Tag
-        </button>
-        <button id="reset" class="secondary">
-            ↺ Neustart
-        </button>
+        <button id="nextDay">▶ Nächster Tag</button>
+        <button id="reset" class="secondary">↺ Neustart</button>
     </div>
+
     <div class="stats">
         <div class="card">
             <div class="stat-label">Tag</div>
@@ -170,19 +117,20 @@
             <div class="stat-value" id="sales">0</div>
         </div>
     </div>
+
     <div class="card">
         <h2 class="section-title">🛒 Markt</h2>
-        <p class="muted">
-            Verfügbare Waren auf dem Markt
-        </p>
+        <p class="muted">Verfügbare Waren auf dem Markt</p>
         <div id="market"></div>
     </div>
     <br>
+
     <div class="card">
         <h2 class="section-title">📜 Ereignisse</h2>
         <div id="log" class="log"></div>
     </div>
     <br>
+
     <div class="card">
         <h2 class="section-title">👥 Bewohner</h2>
         <div class="table-wrapper">
@@ -201,13 +149,9 @@
         </div>
     </div>
 </div>
+
 <script>
 "use strict";
-/*
-    ==========================================
-    GRUNDLAGEN DER SIMULATION
-    ==========================================
-*/
 
 const prices = {
     Getreide: 2,
@@ -268,6 +212,7 @@ function createInitialState() {
     return {
         day: 1,
         transactionsToday: 0,
+        totalProducedToday: 0,
         log: [
             "Das Dorf Sonnenfeld wurde gegründet.",
             "Jeder Bewohner startet mit 100 Münzen."
@@ -308,60 +253,6 @@ function getStockText(stock) {
             return entry[0] + " ×" + entry[1];
         })
         .join(", ");
-}
-
-function produceGoods() {
-    state.people.forEach(function(person) {
-        const recipe = productionRecipes[person.job];
-        if (!recipe) return;
-
-        const requiredInputs = recipe.inputs;
-        let canProduce = true;
-
-        /* Überprüfe, ob genug Rohstoffe vorhanden sind */
-        Object.keys(requiredInputs).forEach(function(material) {
-            const available = person.stock[material] || 0;
-            if (available < requiredInputs[material]) {
-                canProduce = false;
-            }
-        });
-
-        if (!canProduce) {
-            const missingItems = Object.keys(requiredInputs)
-                .filter(function(material) {
-                    return (person.stock[material] || 0) < requiredInputs[material];
-                })
-                .map(function(material) {
-                    return material + " ×" + requiredInputs[material];
-                })
-                .join(", ");
-
-            state.log.push(
-                "⛔ " + person.name + " kann nicht produzieren: " + missingItems + " fehlt"
-            );
-            return;
-        }
-
-        /* Verbrauche Rohstoffe */
-        Object.keys(requiredInputs).forEach(function(material) {
-            person.stock[material] -= requiredInputs[material];
-        });
-
-        /* Produziere Waren */
-        const output = recipe.output;
-        const outputAmount = recipe.outputAmount;
-        person.stock[output] = (person.stock[output] || 0) + outputAmount;
-
-        const inputsText = Object.keys(requiredInputs).length > 0
-            ? Object.keys(requiredInputs)
-                .map(function(m) { return m + " ×" + requiredInputs[m]; })
-                .join(" + ")
-            : "ohne Rohstoffe";
-
-        state.log.push(
-            "📦 " + person.name + " (" + person.job + ") produziert " + outputAmount + "× " + output + " aus " + inputsText
-        );
-    });
 }
 
 function buyRawMaterials() {
@@ -416,6 +307,58 @@ function buyRawMaterials() {
     });
 }
 
+function produceGoods() {
+    state.people.forEach(function(person) {
+        const recipe = productionRecipes[person.job];
+        if (!recipe) return;
+
+        const requiredInputs = recipe.inputs;
+        let canProduce = true;
+
+        Object.keys(requiredInputs).forEach(function(material) {
+            const available = person.stock[material] || 0;
+            if (available < requiredInputs[material]) {
+                canProduce = false;
+            }
+        });
+
+        if (!canProduce) {
+            const missingItems = Object.keys(requiredInputs)
+                .filter(function(material) {
+                    return (person.stock[material] || 0) < requiredInputs[material];
+                })
+                .map(function(material) {
+                    return material + " ×" + requiredInputs[material];
+                })
+                .join(", ");
+
+            state.log.push(
+                "⛔ " + person.name + " kann nicht produzieren: " + missingItems + " fehlt"
+            );
+            return;
+        }
+
+        Object.keys(requiredInputs).forEach(function(material) {
+            person.stock[material] -= requiredInputs[material];
+        });
+
+        const output = recipe.output;
+        const outputAmount = recipe.outputAmount;
+        person.stock[output] = (person.stock[output] || 0) + outputAmount;
+        state.totalProducedToday += outputAmount;
+
+        const inputsText = Object.keys(requiredInputs).length > 0
+            ? Object.keys(requiredInputs)
+                .map(function(m) { return m + " ×" + requiredInputs[m]; })
+                .join(" + ")
+            : "ohne Rohstoffe";
+
+        state.log.push(
+            "📦 " + person.name + " (" + person.job + ") produziert " + outputAmount + "× " + output + " aus " + inputsText
+        );
+    });
+}
+
 function consumeGoods() {
     state.people.forEach(function(buyer) {
         universalNeeds.forEach(function(need) {
@@ -464,6 +407,7 @@ function consumeGoods() {
 
 function nextDay() {
     state.transactionsToday = 0;
+    state.totalProducedToday = 0;
 
     state.people.forEach(function(person) {
         person.needsFulfilled = {
@@ -474,9 +418,9 @@ function nextDay() {
     });
 
     state.log.push("--- TAG " + state.day + " ---");
-    
-    produceGoods();
+
     buyRawMaterials();
+    produceGoods();
     consumeGoods();
 
     const totalMoney = state.people.reduce(
@@ -487,7 +431,7 @@ function nextDay() {
     );
 
     state.log.push(
-        "📊 Tag " + state.day + " beendet: " + state.transactionsToday + " Transaktionen. Geld: " + Math.round(totalMoney) + " ₰."
+        "📊 Tag " + state.day + " beendet: " + state.totalProducedToday + " produziert, " + state.transactionsToday + " Transaktionen. Geld: " + Math.round(totalMoney) + " ₰."
     );
 
     state.day++;
