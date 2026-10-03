@@ -333,7 +333,7 @@ function produceGoods() {
                 .join(", ");
 
             state.log.push(
-                "⛔ " + person.name + " kann nicht produzieren: " + missingItems + " fehlt"
+                "⛔ " + person.name + " (" + person.job + ") kann nicht produzieren: " + missingItems + " fehlt"
             );
             return;
         }
@@ -493,7 +493,7 @@ function renderLog() {
     state.log
         .slice()
         .reverse()
-        .slice(0, 25)
+        .slice(0, 30)
         .forEach(function(message) {
             const entry = document.createElement("div");
             entry.className = "log-entry";
@@ -506,7 +506,7 @@ function renderLog() {
                 entry.className += " consumption";
             } else if (message.startsWith("💳")) {
                 entry.className += " trade";
-            } else if (message.startsWith("❌") || message.startsWith("💸")) {
+            } else if (message.startsWith("⛔") || message.startsWith("❌") || message.startsWith("💸")) {
                 entry.className += " error";
             } else if (message.startsWith("📊") || message.startsWith("---")) {
                 entry.className += " summary";
