@@ -94,6 +94,16 @@
         padding: 7px 0;
         border-bottom: 1px solid #e5e5ea;
     }
+    .log-entry.production {
+        color: #34c759;
+    }
+    .log-entry.trade {
+        color: #007aff;
+    }
+    .log-entry.summary {
+        color: #6e6e73;
+        font-weight: 500;
+    }
     .table-wrapper {
         overflow-x: auto;
     }
@@ -344,6 +354,20 @@ function produceGoods() {
             person.stock[person.product] = 0;
         }
         person.stock[person.product] += amount;
+        
+        /* LOG: Produktion tracken */
+        if (amount > 0) {
+            state.log.push(
+                "📦 " +
+                person.name +
+                " (" +
+                person.job +
+                ") produziert " +
+                amount +
+                "× " +
+                person.product
+            );
+        }
     });
 }
 /*
@@ -375,6 +399,20 @@ function buyProduct(seller, buyer, product) {
         buyer.stock[product] = 0;
     }
     buyer.stock[product]++;
+    
+    /* LOG: Handel tracken */
+    state.log.push(
+        "💳 " +
+        buyer.name +
+        " kauft 1× " +
+        product +
+        " von " +
+        seller.name +
+        " für " +
+        price +
+        " ₰"
+    );
+    
     state.salesToday++;
     return true;
 }
@@ -454,9 +492,9 @@ function nextDay() {
         Ereignis speichern
     */
     state.log.push(
-        "Tag " +
+        "📊 Tag " +
         state.day +
-        ": " +
+        " beendet: " +
         state.salesToday +
         " Verkäufe. " +
         "Geld im Dorf: " +
@@ -557,10 +595,20 @@ function renderLog() {
     state.log
         .slice()
         .reverse()
-        .slice(0, 10)
+        .slice(0, 15)
         .forEach(function(message) {
             const entry = document.createElement("div");
             entry.className = "log-entry";
+            
+            /* Farbcodierung */
+            if (message.startsWith("📦")) {
+                entry.className += " production";
+            } else if (message.startsWith("💳")) {
+                entry.className += " trade";
+            } else if (message.startsWith("📊")) {
+                entry.className += " summary";
+            }
+            
             entry.textContent = message;
             log.appendChild(entry);
         });
