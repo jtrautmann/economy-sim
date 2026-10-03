@@ -206,7 +206,6 @@
     ==========================================
 */
 
-/* Preise für alle Produkte */
 const prices = {
     Getreide: 2,
     Brot: 5,
@@ -219,66 +218,23 @@ const prices = {
     Wolle: 3
 };
 
-/*
-    Produktionsrezepte: job -> { output: Produktname, outputAmount: Anzahl, inputs: { Rohstoff: Menge } }
-*/
 const productionRecipes = {
-    Bauer: {
-        output: "Getreide",
-        outputAmount: 3,
-        inputs: {}  /* Bauer braucht keine Rohstoffe */
-    },
-    Bäcker: {
-        output: "Brot",
-        outputAmount: 2,
-        inputs: { Getreide: 1 }  /* 1 Getreide -> 2 Brot */
-    },
-    Schneider: {
-        output: "Kleidung",
-        outputAmount: 1,
-        inputs: { Wolle: 1 }  /* 1 Wolle -> 1 Kleidung */
-    },
-    Holzfäller: {
-        output: "Holz",
-        outputAmount: 3,
-        inputs: {}  /* Holzfäller braucht keine Rohstoffe */
-    },
-    Zimmermann: {
-        output: "Möbel",
-        outputAmount: 1,
-        inputs: { Holz: 2 }  /* 2 Holz -> 1 Möbel */
-    },
-    Fischer: {
-        output: "Fisch",
-        outputAmount: 2,
-        inputs: {}  /* Fischer braucht keine Rohstoffe */
-    },
-    Töpfer: {
-        output: "Geschirr",
-        outputAmount: 1,
-        inputs: {}  /* Töpfer braucht keine Rohstoffe */
-    },
-    Schäfer: {
-        output: "Wolle",
-        outputAmount: 2,
-        inputs: {}  /* Schäfer braucht keine Rohstoffe */
-    }
+    Bauer: { output: "Getreide", outputAmount: 3, inputs: {} },
+    Bäcker: { output: "Brot", outputAmount: 2, inputs: { Getreide: 1 } },
+    Schneider: { output: "Kleidung", outputAmount: 1, inputs: { Wolle: 1 } },
+    Holzfäller: { output: "Holz", outputAmount: 3, inputs: {} },
+    Zimmermann: { output: "Möbel", outputAmount: 1, inputs: { Holz: 2 } },
+    Fischer: { output: "Fisch", outputAmount: 2, inputs: {} },
+    Töpfer: { output: "Geschirr", outputAmount: 1, inputs: {} },
+    Schäfer: { output: "Wolle", outputAmount: 2, inputs: {} }
 };
 
-/*
-    Universelle Bedürfnisse aller Bewohner
-*/
 const universalNeeds = [
     { category: "Lebensmittel", options: ["Brot", "Fisch"] },
     { category: "Kleidung", options: ["Kleidung"] },
     { category: "Haushalt", options: ["Geschirr", "Möbel"] }
 ];
 
-/*
-    Jede Person hat:
-    Name
-    Beruf
-*/
 const initialPeople = [
     { name: "Anna", job: "Bauer" },
     { name: "Ben", job: "Bäcker" },
@@ -294,11 +250,13 @@ const initialPeople = [
     { name: "Leo", job: "Schneider" }
 ];
 
-/*
-    ==========================================
-    SPIELZUSTAND
-    ==========================================
-*/
+const initialStarterInventory = {
+    Anna: { Getreide: 4 },
+    David: { Wolle: 3 },
+    Emma: { Holz: 4 },
+    Ida: { Getreide: 2 }
+};
+
 let state;
 
 function createInitialState() {
@@ -310,12 +268,18 @@ function createInitialState() {
             "Jeder Bewohner startet mit 100 Münzen."
         ],
         people: initialPeople.map(function(person, index) {
+            const stock = {};
+            const starter = initialStarterInventory[person.name] || {};
+            Object.keys(starter).forEach(function(item) {
+                stock[item] = starter[item];
+            });
+
             return {
                 id: index,
                 name: person.name,
                 job: person.job,
                 money: 100,
-                stock: {},  /* Lager: { Produktname: Anzahl } */
+                stock: stock,
                 needsFulfilled: {
                     "Lebensmittel": false,
                     "Kleidung": false,
@@ -326,11 +290,6 @@ function createInitialState() {
     };
 }
 
-/*
-    ==========================================
-    HILFSFUNKTIONEN
-    ==========================================
-*/
 function formatMoney(value) {
     return Math.round(value).toLocaleString("de-DE") + " ₰";
 }
@@ -346,28 +305,19 @@ function getStockText(stock) {
         .join(", ");
 }
 
-/*
-    ==========================================
-    ROHSTOFFKAUF (vor Produktion)
-    ==========================================
-*/
 function buyRawMaterials() {
     state.people.forEach(function(producer) {
         const recipe = productionRecipes[producer.job];
         if (!recipe) return;
-        
-        const requiredInputs = recipe.inputs;
-        
-        Object.keys(requiredInputs).forEach(function(material) {
-            const neededAmount = requiredInputs[material];
+
+        Object.keys(recipe.inputs).forEach(function(material) {
+            const neededAmount = recipe.inputs[material];
             const currentStock = producer.stock[material] || 0;
-            
-            /* Kaufe nur, wenn nicht genug im Lager */
+
             if (currentStock < neededAmount) {
                 const amountToBuy = neededAmount - currentStock;
-                
+
                 for (let i = 0; i < amountToBuy; i++) {
-                    /* Suche Verkäufer */
                     const seller = state.people.find(function(person) {
                         const sellerRecipe = productionRecipes[person.job];
                         return (
@@ -377,47 +327,32 @@ function buyRawMaterials() {
                             (person.stock[material] || 0) > 0
                         );
                     });
-                    
+
                     if (!seller) {
                         state.log.push(
-                            "❌ " +
-                            producer.name +
-                            " konnte 1× " +
-                            material +
-                            " nicht kaufen (nicht verfügbar)"
+                            "❌ " + producer.name + " konnte 1× " + material + " nicht kaufen (nicht verfügbar)"
                         );
                         continue;
                     }
-                    
+
                     const price = prices[material];
                     if (producer.money < price) {
                         state.log.push(
-                            "💸 " +
-                            producer.name +
-                            " hat nicht genug Geld für " +
-                            material
+                            "💸 " + producer.name + " hat nicht genug Geld für " + material
                         );
                         continue;
                     }
-                    
-                    /* Kauf durchführen */
+
                     producer.money -= price;
                     seller.money += price;
-                    seller.stock[material]--;
+                    seller.stock[material] = (seller.stock[material] || 0) - 1;
+                    if (seller.stock[material] < 0) seller.stock[material] = 0;
                     producer.stock[material] = (producer.stock[material] || 0) + 1;
-                    
+
                     state.log.push(
-                        "⚙️  " +
-                        producer.name +
-                        " kauft 1× " +
-                        material +
-                        " von " +
-                        seller.name +
-                        " für " +
-                        price +
-                        " ₰"
+                        "⚙️  " + producer.name + " kauft 1× " + material + " von " + seller.name + " für " + price + " ₰"
                     );
-                    
+
                     state.transactionsToday++;
                 }
             }
@@ -425,28 +360,21 @@ function buyRawMaterials() {
     });
 }
 
-/*
-    ==========================================
-    PRODUKTION
-    ==========================================
-*/
 function produceGoods() {
     state.people.forEach(function(person) {
         const recipe = productionRecipes[person.job];
         if (!recipe) return;
-        
+
         const requiredInputs = recipe.inputs;
-        
-        /* Überprüfe, ob alle Rohstoffe vorhanden sind */
         let canProduce = true;
+
         Object.keys(requiredInputs).forEach(function(material) {
-            const needed = requiredInputs[material];
             const available = person.stock[material] || 0;
-            if (available < needed) {
+            if (available < requiredInputs[material]) {
                 canProduce = false;
             }
         });
-        
+
         if (!canProduce) {
             const missingItems = Object.keys(requiredInputs)
                 .filter(function(material) {
@@ -456,108 +384,71 @@ function produceGoods() {
                     return material + " ×" + requiredInputs[material];
                 })
                 .join(", ");
-            
+
             state.log.push(
-                "⛔ " +
-                person.name +
-                " kann nicht produzieren: " +
-                missingItems +
-                " fehlt"
+                "⛔ " + person.name + " kann nicht produzieren: " + missingItems + " fehlt"
             );
             return;
         }
-        
-        /* Verbrauche Rohstoffe */
+
         Object.keys(requiredInputs).forEach(function(material) {
             person.stock[material] -= requiredInputs[material];
         });
-        
-        /* Produziere Waren */
+
         const output = recipe.output;
         const outputAmount = recipe.outputAmount;
         person.stock[output] = (person.stock[output] || 0) + outputAmount;
-        
+
         const inputsText = Object.keys(requiredInputs).length > 0
             ? Object.keys(requiredInputs)
                 .map(function(m) { return m + " ×" + requiredInputs[m]; })
                 .join(" + ")
             : "nichts";
-        
+
         state.log.push(
-            "📦 " +
-            person.name +
-            " (" +
-            person.job +
-            ") produziert " +
-            outputAmount +
-            "× " +
-            output +
-            " aus " +
-            inputsText
+            "📦 " + person.name + " (" + person.job + ") produziert " + outputAmount + "× " + output + " aus " + inputsText
         );
     });
 }
 
-/*
-    ==========================================
-    KONSUM (universelle Bedürfnisse)
-    ==========================================
-*/
 function consumeGoods() {
     state.people.forEach(function(buyer) {
-        /* Jeder versucht, seine universellen Bedürfnisse zu erfüllen */
         universalNeeds.forEach(function(need) {
-            /* Schau, ob Bedarf schon erfüllt */
             if (buyer.needsFulfilled[need.category]) {
                 return;
             }
-            
-            /* Versuche, eines der optionalen Produkte zu kaufen */
+
             let bought = false;
             need.options.forEach(function(desiredProduct) {
                 if (bought) return;
-                
-                /* Finde Verkäufer */
+
                 const seller = state.people.find(function(person) {
                     return (
                         person.id !== buyer.id &&
                         (person.stock[desiredProduct] || 0) > 0
                     );
                 });
-                
+
                 if (!seller) return;
-                
+
                 const price = prices[desiredProduct];
                 if (buyer.money < price) return;
-                
-                /* Kauf durchführen */
+
                 buyer.money -= price;
                 seller.money += price;
-                seller.stock[desiredProduct]--;
+                seller.stock[desiredProduct] = (seller.stock[desiredProduct] || 0) - 1;
                 buyer.stock[desiredProduct] = (buyer.stock[desiredProduct] || 0) + 1;
-                
+
                 state.log.push(
-                    "💳 " +
-                    buyer.name +
-                    " kauft 1× " +
-                    desiredProduct +
-                    " von " +
-                    seller.name +
-                    " für " +
-                    price +
-                    " ₰"
+                    "💳 " + buyer.name + " kauft 1× " + desiredProduct + " von " + seller.name + " für " + price + " ₰"
                 );
-                
-                /* Sofort konsumieren */
-                buyer.stock[desiredProduct]--;
-                
+
+                buyer.stock[desiredProduct] = (buyer.stock[desiredProduct] || 0) - 1;
+
                 state.log.push(
-                    "🍽️  " +
-                    buyer.name +
-                    " verbraucht 1× " +
-                    desiredProduct
+                    "🍽️  " + buyer.name + " verbraucht 1× " + desiredProduct
                 );
-                
+
                 buyer.needsFulfilled[need.category] = true;
                 state.transactionsToday++;
                 bought = true;
@@ -566,15 +457,9 @@ function consumeGoods() {
     });
 }
 
-/*
-    ==========================================
-    EIN TAG
-    ==========================================
-*/
 function nextDay() {
     state.transactionsToday = 0;
-    
-    /* Bedürfnisse zurücksetzen */
+
     state.people.forEach(function(person) {
         person.needsFulfilled = {
             "Lebensmittel": false,
@@ -582,52 +467,26 @@ function nextDay() {
             "Haushalt": false
         };
     });
-    
-    /*
-        1. Rohstoffkauf (Produzenten kaufen Rohstoffe)
-    */
+
     buyRawMaterials();
-    
-    /*
-        2. Produktion
-    */
     produceGoods();
-    
-    /*
-        3. Konsum (Handel für Bedarf)
-    */
     consumeGoods();
-    
-    /*
-        4. Statistik
-    */
+
     const totalMoney = state.people.reduce(
         function(sum, person) {
             return sum + person.money;
         },
         0
     );
-    
+
     state.log.push(
-        "📊 Tag " +
-        state.day +
-        " beendet: " +
-        state.transactionsToday +
-        " Transaktionen. " +
-        "Geld im Dorf: " +
-        Math.round(totalMoney) +
-        " ₰."
+        "📊 Tag " + state.day + " beendet: " + state.transactionsToday + " Transaktionen. Geld im Dorf: " + Math.round(totalMoney) + " ₰."
     );
-    
+
     state.day++;
     render();
 }
 
-/*
-    ==========================================
-    MARKT DARSTELLEN
-    ==========================================
-*/
 function renderMarket() {
     const market = document.getElementById("market");
     const inventory = {};
@@ -635,13 +494,12 @@ function renderMarket() {
         Object.keys(person.stock).forEach(function(product) {
             const amount = person.stock[product];
             if (amount > 0) {
-                if (!inventory[product]) {
-                    inventory[product] = 0;
-                }
+                if (!inventory[product]) inventory[product] = 0;
                 inventory[product] += amount;
             }
         });
     });
+
     market.innerHTML = "";
     Object.keys(prices).forEach(function(product) {
         const amount = inventory[product] || 0;
@@ -649,13 +507,7 @@ function renderMarket() {
             const row = document.createElement("div");
             row.className = "row";
             const name = document.createElement("span");
-            name.innerHTML =
-                "<strong>" +
-                product +
-                "</strong> " +
-                '<span class="muted">· ' +
-                prices[product] +
-                " ₰</span>";
+            name.innerHTML = "<strong>" + product + "</strong> <span class=\"muted\">· " + prices[product] + " ₰</span>";
             const amountSpan = document.createElement("span");
             amountSpan.textContent = amount + " Stück";
             row.appendChild(name);
@@ -665,46 +517,25 @@ function renderMarket() {
     });
 }
 
-/*
-    ==========================================
-    BEWOHNER DARSTELLEN
-    ==========================================
-*/
 function renderPeople() {
     const tbody = document.getElementById("people");
     tbody.innerHTML = "";
     state.people.forEach(function(person) {
         const row = document.createElement("tr");
-        
         const stockText = getStockText(person.stock);
         const needsFulfilledCount = Object.values(person.needsFulfilled).filter(Boolean).length;
         const needsStatus = needsFulfilledCount + "/3";
-        
+
         row.innerHTML =
-            "<td><strong>" +
-            person.name +
-            "</strong></td>" +
-            "<td>" +
-            person.job +
-            "</td>" +
-            "<td>" +
-            formatMoney(person.money) +
-            "</td>" +
-            "<td style='font-size: 12px;'>" +
-            (stockText || "–") +
-            "</td>" +
-            "<td>" +
-            needsStatus +
-            "</td>";
+            "<td><strong>" + person.name + "</strong></td>" +
+            "<td>" + person.job + "</td>" +
+            "<td>" + formatMoney(person.money) + "</td>" +
+            "<td style='font-size: 12px;'>" + (stockText || "–") + "</td>" +
+            "<td>" + needsStatus + "</td>";
         tbody.appendChild(row);
     });
 }
 
-/*
-    ==========================================
-    PROTOKOLL
-    ==========================================
-*/
 function renderLog() {
     const log = document.getElementById("log");
     log.innerHTML = "";
@@ -715,8 +546,7 @@ function renderLog() {
         .forEach(function(message) {
             const entry = document.createElement("div");
             entry.className = "log-entry";
-            
-            /* Farbcodierung */
+
             if (message.startsWith("⚙️")) {
                 entry.className += " rawmaterial";
             } else if (message.startsWith("📦")) {
@@ -728,59 +558,33 @@ function renderLog() {
             } else if (message.startsWith("📊")) {
                 entry.className += " summary";
             }
-            
+
             entry.textContent = message;
             log.appendChild(entry);
         });
 }
 
-/*
-    ==========================================
-    GESAMTE UI AKTUALISIEREN
-    ==========================================
-*/
 function render() {
-    document.getElementById("day").textContent =
-        state.day;
-    document.getElementById("population").textContent =
-        state.people.length;
-    const totalMoney = state.people.reduce(
-        function(sum, person) {
-            return sum + person.money;
-        },
-        0
-    );
-    document.getElementById("money").textContent =
-        formatMoney(totalMoney);
-    document.getElementById("sales").textContent =
-        state.transactionsToday;
+    document.getElementById("day").textContent = state.day;
+    document.getElementById("population").textContent = state.people.length;
+    const totalMoney = state.people.reduce(function(sum, person) {
+        return sum + person.money;
+    }, 0);
+    document.getElementById("money").textContent = formatMoney(totalMoney);
+    document.getElementById("sales").textContent = state.transactionsToday;
     renderMarket();
     renderPeople();
     renderLog();
 }
 
-/*
-    ==========================================
-    BUTTONS
-    ==========================================
-*/
-document
-    .getElementById("nextDay")
-    .addEventListener("click", function() {
-        nextDay();
-    });
-document
-    .getElementById("reset")
-    .addEventListener("click", function() {
-        state = createInitialState();
-        render();
-    });
+document.getElementById("nextDay").addEventListener("click", function() {
+    nextDay();
+});
+document.getElementById("reset").addEventListener("click", function() {
+    state = createInitialState();
+    render();
+});
 
-/*
-    ==========================================
-    START
-    ==========================================
-*/
 state = createInitialState();
 render();
 </script>
