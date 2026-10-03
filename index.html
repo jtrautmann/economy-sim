@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Dorfwirtschaft">
+<title>Dorfwirtschaft – Prototyp</title>
+<style>
+    * {
+        box-sizing: border-box;
+    }
+    body {
+        margin: 0;
+        padding: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f2f2f7;
+        color: #1c1c1e;
+    }
+    .container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    h1 {
+        margin-bottom: 4px;
+    }
+    .subtitle {
+        color: #6e6e73;
+        margin-top: 0;
+    }
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin: 20px 0;
+    }
+    .card {
+        background: white;
+        border-radius: 14px;
+        padding: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .stat-label {
+        color: #6e6e73;
+        font-size: 14px;
+    }
+    .stat-value {
+        font-size: 26px;
+        font-weight: 700;
+        margin-top: 4px;
+    }
+    button {
+        appearance: none;
+        border: none;
+        border-radius: 12px;
+        padding: 13px 18px;
+        font-size: 16px;
+        font-weight: 600;
+        background: #007aff;
+        color: white;
+        cursor: pointer;
+        margin-right: 8px;
+        margin-bottom: 8px;
+    }
+    button.secondary {
+        background: #e5e5ea;
+        color: #1c1c1e;
+    }
+    button:active {
+        transform: scale(0.98);
+    }
+    .section-title {
+        margin-top: 0;
+    }
+    .row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #e5e5ea;
+    }
+    .row:last-child {
+        border-bottom: none;
+    }
+    .muted {
+        color: #6e6e73;
+    }
+    .log {
+        max-height: 250px;
+        overflow-y: auto;
+        font-size: 14px;
+    }
+    .log-entry {
+        padding: 7px 0;
+        border-bottom: 1px solid #e5e5ea;
+    }
+    .table-wrapper {
+        overflow-x: auto;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+    th,
+    td {
+        text-align: left;
+        padding: 9px 8px;
+        border-bottom: 1px solid #e5e5ea;
+        white-space: nowrap;
+    }
+    th {
+        color: #6e6e73;
+    }
+    @media (min-width: 600px) {
+        .stats {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>🏡 Dorf Sonnenfeld</h1>
+    <p class="subtitle">
+        Kleine Wirtschaftssimulation
+    </p>
+    <div>
+        <button id="nextDay">
+            ▶ Nächster Tag
+        </button>
+        <button id="reset" class="secondary">
+            ↺ Neustart
+        </button>
+    </div>
+    <div class="stats">
+        <div class="card">
+            <div class="stat-label">Tag</div>
+            <div class="stat-value" id="day">1</div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Einwohner</div>
+            <div class="stat-value" id="population">12</div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Geld im Dorf</div>
+            <div class="stat-value" id="money">1.200 ₰</div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Verkäufe heute</div>
+            <div class="stat-value" id="sales">0</div>
+        </div>
+    </div>
+    <div class="card">
+        <h2 class="section-title">🛒 Markt</h2>
+        <p class="muted">
+            Jeder Bewohner produziert sein eigenes Produkt.
+        </p>
+        <div id="market"></div>
+    </div>
+    <br>
+    <div class="card">
+        <h2 class="section-title">📜 Ereignisse</h2>
+        <div id="log" class="log"></div>
+    </div>
+    <br>
+    <div class="card">
+        <h2 class="section-title">👥 Bewohner</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Beruf</th>
+                        <th>Produkt</th>
+                        <th>Geld</th>
+                        <th>Lager</th>
+                        <th>Bedürfnis</th>
+                    </tr>
+                </thead>
+                <tbody id="people"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+"use strict";
+/*
+    ==========================================
+    GRUNDLAGEN DER SIMULATION
+    ==========================================
+*/
+const prices = {
+    Getreide: 2,
+    Brot: 5,
+    Kleidung: 12,
+    Holz: 3,
+    Möbel: 25,
+    Fisch: 6,
+    Geschirr: 8
+};
+/*
+    Produktionsmenge pro Tag
+*/
+const production = {
+    Bauer: 3,
+    Bäcker: 2,
+    Schneider: 1,
+    Holzfäller: 3,
+    Zimmermann: 1,
+    Fischer: 2,
+    Töpfer: 1
+};
+/*
+    Jede Person hat:
+    Name
+    Beruf
+    Produkt
+    Bedürfnis
+    Geld
+    Lager
+*/
+const initialPeople = [
+    {
+        name: "Anna",
+        job: "Bauer",
+        product: "Getreide",
+        need: "Brot"
+    },
+    {
+        name: "Ben",
+        job: "Bäcker",
+        product: "Brot",
+        need: "Brot"
+    },
+    {
+        name: "Clara",
+        job: "Schneider",
+        product: "Kleidung",
+        need: "Kleidung"
+    },
+    {
+        name: "David",
+        job: "Schneider",
+        product: "Kleidung",
+        need: "Kleidung"
+    },
+    {
+        name: "Emma",
+        job: "Holzfäller",
+        product: "Holz",
+        need: "Holz"
+    },
+    {
+        name: "Felix",
+        job: "Zimmermann",
+        product: "Möbel",
+        need: "Möbel"
+    },
+    {
+        name: "Greta",
+        job: "Fischer",
+        product: "Fisch",
+        need: "Fisch"
+    },
+    {
+        name: "Hans",
+        job: "Töpfer",
+        product: "Geschirr",
+        need: "Geschirr"
+    },
+    {
+        name: "Ida",
+        job: "Bauer",
+        product: "Getreide",
+        need: "Brot"
+    },
+    {
+        name: "Jonas",
+        job: "Bäcker",
+        product: "Brot",
+        need: "Brot"
+    },
+    {
+        name: "Klara",
+        job: "Fischer",
+        product: "Fisch",
+        need: "Fisch"
+    },
+    {
+        name: "Leo",
+        job: "Schneider",
+        product: "Kleidung",
+        need: "Kleidung"
+    }
+];
+/*
+    ==========================================
+    SPIELZUSTAND
+    ==========================================
+*/
+let state;
+/*
+    Erstellt einen neuen Spielstand
+*/
+function createInitialState() {
+    return {
+        day: 1,
+        salesToday: 0,
+        log: [
+            "Das Dorf Sonnenfeld wurde gegründet.",
+            "Jeder Bewohner startet mit 100 Münzen."
+        ],
+        people: initialPeople.map(function(person, index) {
+            return {
+                id: index,
+                name: person.name,
+                job: person.job,
+                product: person.product,
+                need: person.need,
+                money: 100,
+                stock: {}
+            };
+        })
+    };
+}
+/*
+    ==========================================
+    HILFSFUNKTIONEN
+    ==========================================
+*/
+function formatMoney(value) {
+    return Math.round(value).toLocaleString("de-DE") + " ₰";
+}
+/*
+    ==========================================
+    PRODUKTION
+    ==========================================
+*/
+function produceGoods() {
+    state.people.forEach(function(person) {
+        const amount = production[person.job] || 0;
+        if (!person.stock[person.product]) {
+            person.stock[person.product] = 0;
+        }
+        person.stock[person.product] += amount;
+    });
+}
+/*
+    ==========================================
+    KAUF
+    ==========================================
+*/
+function buyProduct(seller, buyer, product) {
+    const price = prices[product];
+    if (price === undefined) {
+        return false;
+    }
+    if ((seller.stock[product] || 0) <= 0) {
+        return false;
+    }
+    if (buyer.money < price) {
+        return false;
+    }
+    /*
+        Geld wechselt den Besitzer
+    */
+    buyer.money -= price;
+    seller.money += price;
+    /*
+        Ware wechselt den Besitzer
+    */
+    seller.stock[product]--;
+    if (!buyer.stock[product]) {
+        buyer.stock[product] = 0;
+    }
+    buyer.stock[product]++;
+    state.salesToday++;
+    return true;
+}
+/*
+    ==========================================
+    KONSUM
+    ==========================================
+*/
+function consumeGoods() {
+    state.people.forEach(function(buyer) {
+        const desiredProduct = buyer.need;
+        if (!desiredProduct) {
+            return;
+        }
+        /*
+            Suche den einzigen Verkäufer
+            dieses Produkts.
+            In dieser ersten Version darf
+            es mehrere Produzenten desselben
+            Produkts geben, aber der Käufer
+            nimmt einfach den ersten verfügbaren.
+        */
+        const seller = state.people.find(function(person) {
+            return (
+                person.id !== buyer.id &&
+                person.product === desiredProduct &&
+                (person.stock[desiredProduct] || 0) > 0
+            );
+        });
+        if (!seller) {
+            return;
+        }
+        /*
+            Kaufen
+        */
+        const success = buyProduct(
+            seller,
+            buyer,
+            desiredProduct
+        );
+        if (!success) {
+            return;
+        }
+        /*
+            Direkt konsumieren
+        */
+        if (buyer.stock[desiredProduct] > 0) {
+            buyer.stock[desiredProduct]--;
+        }
+    });
+}
+/*
+    ==========================================
+    EIN TAG
+    ==========================================
+*/
+function nextDay() {
+    state.salesToday = 0;
+    /*
+        1. Produktion
+    */
+    produceGoods();
+    /*
+        2. Handel und Konsum
+    */
+    consumeGoods();
+    /*
+        3. Statistik
+    */
+    const totalMoney = state.people.reduce(
+        function(sum, person) {
+            return sum + person.money;
+        },
+        0
+    );
+    /*
+        Ereignis speichern
+    */
+    state.log.push(
+        "Tag " +
+        state.day +
+        ": " +
+        state.salesToday +
+        " Verkäufe. " +
+        "Geld im Dorf: " +
+        Math.round(totalMoney) +
+        " ₰."
+    );
+    /*
+        Nächsten Tag starten
+    */
+    state.day++;
+    render();
+}
+/*
+    ==========================================
+    MARKT DARSTELLEN
+    ==========================================
+*/
+function renderMarket() {
+    const market = document.getElementById("market");
+    const inventory = {};
+    state.people.forEach(function(person) {
+        const product = person.product;
+        const amount = person.stock[product] || 0;
+        if (!inventory[product]) {
+            inventory[product] = 0;
+        }
+        inventory[product] += amount;
+    });
+    market.innerHTML = "";
+    Object.keys(prices).forEach(function(product) {
+        const row = document.createElement("div");
+        row.className = "row";
+        const name = document.createElement("span");
+        name.innerHTML =
+            "<strong>" +
+            product +
+            "</strong> " +
+            '<span class="muted">· ' +
+            prices[product] +
+            " ₰</span>";
+        const amount = document.createElement("span");
+        amount.textContent =
+            (inventory[product] || 0) +
+            " Stück";
+        row.appendChild(name);
+        row.appendChild(amount);
+        market.appendChild(row);
+    });
+}
+/*
+    ==========================================
+    BEWOHNER DARSTELLEN
+    ==========================================
+*/
+function renderPeople() {
+    const tbody = document.getElementById("people");
+    tbody.innerHTML = "";
+    state.people.forEach(function(person) {
+        const row = document.createElement("tr");
+        const stockText = Object.entries(person.stock)
+            .filter(function(entry) {
+                return entry[1] > 0;
+            })
+            .map(function(entry) {
+                return entry[0] + " ×" + entry[1];
+            })
+            .join(", ");
+        row.innerHTML =
+            "<td><strong>" +
+            person.name +
+            "</strong></td>" +
+            "<td>" +
+            person.job +
+            "</td>" +
+            "<td>" +
+            person.product +
+            "</td>" +
+            "<td>" +
+            formatMoney(person.money) +
+            "</td>" +
+            "<td>" +
+            (stockText || "–") +
+            "</td>" +
+            "<td>" +
+            person.need +
+            "</td>";
+        tbody.appendChild(row);
+    });
+}
+/*
+    ==========================================
+    PROTOKOLL
+    ==========================================
+*/
+function renderLog() {
+    const log = document.getElementById("log");
+    log.innerHTML = "";
+    state.log
+        .slice()
+        .reverse()
+        .slice(0, 10)
+        .forEach(function(message) {
+            const entry = document.createElement("div");
+            entry.className = "log-entry";
+            entry.textContent = message;
+            log.appendChild(entry);
+        });
+}
+/*
+    ==========================================
+    GESAMTE UI AKTUALISIEREN
+    ==========================================
+*/
+function render() {
+    document.getElementById("day").textContent =
+        state.day;
+    document.getElementById("population").textContent =
+        state.people.length;
+    const totalMoney = state.people.reduce(
+        function(sum, person) {
+            return sum + person.money;
+        },
+        0
+    );
+    document.getElementById("money").textContent =
+        formatMoney(totalMoney);
+    document.getElementById("sales").textContent =
+        state.salesToday;
+    renderMarket();
+    renderPeople();
+    renderLog();
+}
+/*
+    ==========================================
+    BUTTONS
+    ==========================================
+*/
+document
+    .getElementById("nextDay")
+    .addEventListener("click", function() {
+        nextDay();
+    });
+document
+    .getElementById("reset")
+    .addEventListener("click", function() {
+        state = createInitialState();
+        render();
+    });
+/*
+    ==========================================
+    START
+    ==========================================
+*/
+state = createInitialState();
+render();
+</script>
+</body>
+</html>
