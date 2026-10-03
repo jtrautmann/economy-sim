@@ -106,6 +106,9 @@
     .log-entry.trade {
         color: #007aff;
     }
+    .log-entry.error {
+        color: #ff3b30;
+    }
     .log-entry.summary {
         color: #6e6e73;
         font-weight: 500;
@@ -214,7 +217,6 @@ const prices = {
     Möbel: 25,
     Fisch: 6,
     Geschirr: 8,
-    Leinen: 4,
     Wolle: 3
 };
 
@@ -252,9 +254,12 @@ const initialPeople = [
 
 const initialStarterInventory = {
     Anna: { Getreide: 4 },
-    David: { Wolle: 3 },
-    Emma: { Holz: 4 },
-    Ida: { Getreide: 2 }
+    Ida: { Getreide: 3 },
+    David: { Wolle: 4 },
+    Emma: { Holz: 6 },
+    Greta: { Fisch: 3 },
+    Klara: { Fisch: 2 },
+    Hans: { Geschirr: 2 }
 };
 
 let state;
@@ -305,6 +310,60 @@ function getStockText(stock) {
         .join(", ");
 }
 
+function produceGoods() {
+    state.people.forEach(function(person) {
+        const recipe = productionRecipes[person.job];
+        if (!recipe) return;
+
+        const requiredInputs = recipe.inputs;
+        let canProduce = true;
+
+        /* Überprüfe, ob genug Rohstoffe vorhanden sind */
+        Object.keys(requiredInputs).forEach(function(material) {
+            const available = person.stock[material] || 0;
+            if (available < requiredInputs[material]) {
+                canProduce = false;
+            }
+        });
+
+        if (!canProduce) {
+            const missingItems = Object.keys(requiredInputs)
+                .filter(function(material) {
+                    return (person.stock[material] || 0) < requiredInputs[material];
+                })
+                .map(function(material) {
+                    return material + " ×" + requiredInputs[material];
+                })
+                .join(", ");
+
+            state.log.push(
+                "⛔ " + person.name + " kann nicht produzieren: " + missingItems + " fehlt"
+            );
+            return;
+        }
+
+        /* Verbrauche Rohstoffe */
+        Object.keys(requiredInputs).forEach(function(material) {
+            person.stock[material] -= requiredInputs[material];
+        });
+
+        /* Produziere Waren */
+        const output = recipe.output;
+        const outputAmount = recipe.outputAmount;
+        person.stock[output] = (person.stock[output] || 0) + outputAmount;
+
+        const inputsText = Object.keys(requiredInputs).length > 0
+            ? Object.keys(requiredInputs)
+                .map(function(m) { return m + " ×" + requiredInputs[m]; })
+                .join(" + ")
+            : "ohne Rohstoffe";
+
+        state.log.push(
+            "📦 " + person.name + " (" + person.job + ") produziert " + outputAmount + "× " + output + " aus " + inputsText
+        );
+    });
+}
+
 function buyRawMaterials() {
     state.people.forEach(function(producer) {
         const recipe = productionRecipes[producer.job];
@@ -319,18 +378,15 @@ function buyRawMaterials() {
 
                 for (let i = 0; i < amountToBuy; i++) {
                     const seller = state.people.find(function(person) {
-                        const sellerRecipe = productionRecipes[person.job];
                         return (
                             person.id !== producer.id &&
-                            sellerRecipe &&
-                            sellerRecipe.output === material &&
                             (person.stock[material] || 0) > 0
                         );
                     });
 
                     if (!seller) {
                         state.log.push(
-                            "❌ " + producer.name + " konnte 1× " + material + " nicht kaufen (nicht verfügbar)"
+                            "❌ " + producer.name + " konnte 1× " + material + " nicht kaufen"
                         );
                         continue;
                     }
@@ -357,57 +413,6 @@ function buyRawMaterials() {
                 }
             }
         });
-    });
-}
-
-function produceGoods() {
-    state.people.forEach(function(person) {
-        const recipe = productionRecipes[person.job];
-        if (!recipe) return;
-
-        const requiredInputs = recipe.inputs;
-        let canProduce = true;
-
-        Object.keys(requiredInputs).forEach(function(material) {
-            const available = person.stock[material] || 0;
-            if (available < requiredInputs[material]) {
-                canProduce = false;
-            }
-        });
-
-        if (!canProduce) {
-            const missingItems = Object.keys(requiredInputs)
-                .filter(function(material) {
-                    return (person.stock[material] || 0) < requiredInputs[material];
-                })
-                .map(function(material) {
-                    return material + " ×" + requiredInputs[material];
-                })
-                .join(", ");
-
-            state.log.push(
-                "⛔ " + person.name + " kann nicht produzieren: " + missingItems + " fehlt"
-            );
-            return;
-        }
-
-        Object.keys(requiredInputs).forEach(function(material) {
-            person.stock[material] -= requiredInputs[material];
-        });
-
-        const output = recipe.output;
-        const outputAmount = recipe.outputAmount;
-        person.stock[output] = (person.stock[output] || 0) + outputAmount;
-
-        const inputsText = Object.keys(requiredInputs).length > 0
-            ? Object.keys(requiredInputs)
-                .map(function(m) { return m + " ×" + requiredInputs[m]; })
-                .join(" + ")
-            : "nichts";
-
-        state.log.push(
-            "📦 " + person.name + " (" + person.job + ") produziert " + outputAmount + "× " + output + " aus " + inputsText
-        );
     });
 }
 
@@ -468,8 +473,10 @@ function nextDay() {
         };
     });
 
-    buyRawMaterials();
+    state.log.push("--- TAG " + state.day + " ---");
+    
     produceGoods();
+    buyRawMaterials();
     consumeGoods();
 
     const totalMoney = state.people.reduce(
@@ -480,7 +487,7 @@ function nextDay() {
     );
 
     state.log.push(
-        "📊 Tag " + state.day + " beendet: " + state.transactionsToday + " Transaktionen. Geld im Dorf: " + Math.round(totalMoney) + " ₰."
+        "📊 Tag " + state.day + " beendet: " + state.transactionsToday + " Transaktionen. Geld: " + Math.round(totalMoney) + " ₰."
     );
 
     state.day++;
@@ -542,7 +549,7 @@ function renderLog() {
     state.log
         .slice()
         .reverse()
-        .slice(0, 20)
+        .slice(0, 25)
         .forEach(function(message) {
             const entry = document.createElement("div");
             entry.className = "log-entry";
@@ -555,7 +562,9 @@ function renderLog() {
                 entry.className += " consumption";
             } else if (message.startsWith("💳")) {
                 entry.className += " trade";
-            } else if (message.startsWith("📊")) {
+            } else if (message.startsWith("❌") || message.startsWith("💸")) {
+                entry.className += " error";
+            } else if (message.startsWith("📊") || message.startsWith("---")) {
                 entry.className += " summary";
             }
 
