@@ -94,6 +94,9 @@
         padding: 7px 0;
         border-bottom: 1px solid #e5e5ea;
     }
+    .log-entry.rawmaterial {
+        color: #ff9500;
+    }
     .log-entry.production {
         color: #34c759;
     }
@@ -157,14 +160,14 @@
             <div class="stat-value" id="money">1.200 ₰</div>
         </div>
         <div class="card">
-            <div class="stat-label">Verkäufe heute</div>
+            <div class="stat-label">Transaktionen heute</div>
             <div class="stat-value" id="sales">0</div>
         </div>
     </div>
     <div class="card">
         <h2 class="section-title">🛒 Markt</h2>
         <p class="muted">
-            Jeder Bewohner produziert sein eigenes Produkt.
+            Verfügbare Waren auf dem Markt
         </p>
         <div id="market"></div>
     </div>
@@ -182,10 +185,10 @@
                     <tr>
                         <th>Name</th>
                         <th>Beruf</th>
-                        <th>Produkt</th>
+                        <th>Produziert</th>
                         <th>Geld</th>
                         <th>Lager</th>
-                        <th>Bedürfnis</th>
+                        <th>Erfüllt</th>
                     </tr>
                 </thead>
                 <tbody id="people"></tbody>
@@ -200,6 +203,8 @@
     GRUNDLAGEN DER SIMULATION
     ==========================================
 */
+
+/* Preise für alle Produkte/Rohstoffe */
 const prices = {
     Getreide: 2,
     Brot: 5,
@@ -209,9 +214,8 @@ const prices = {
     Fisch: 6,
     Geschirr: 8
 };
-/*
-    Produktionsmenge pro Tag
-*/
+
+/* Produktionsmenge pro Tag */
 const production = {
     Bauer: 3,
     Bäcker: 2,
@@ -221,102 +225,66 @@ const production = {
     Fischer: 2,
     Töpfer: 1
 };
+
+/*
+    Rohstoffe, die für die Produktion nötig sind
+    job -> [Liste der Rohstoffe, die gekauft werden müssen]
+*/
+const rawMaterials = {
+    Bauer: [],           /* Bauer braucht keine Rohstoffe */
+    Bäcker: ["Getreide"], /* Bäcker braucht Getreide um Brot zu machen */
+    Schneider: [],       /* Schneider hat Rohstoffe selbst? */
+    Holzfäller: [],      /* Holzfäller braucht keine Rohstoffe */
+    Zimmermann: ["Holz"], /* Zimmermann braucht Holz um Möbel zu machen */
+    Fischer: [],         /* Fischer braucht keine Rohstoffe */
+    Töpfer: []          /* Töpfer hat Rohstoffe selbst? */
+};
+
+/*
+    Universelle Bedürfnisse aller Bewohner
+    Jeder Bewohner braucht täglich:
+    - Lebensmittel (Brot oder Fisch)
+    - Kleidung
+    - Haushaltsware (Geschirr oder Möbel)
+*/
+const universalNeeds = [
+    { category: "Lebensmittel", options: ["Brot", "Fisch"] },
+    { category: "Kleidung", options: ["Kleidung"] },
+    { category: "Haushalt", options: ["Geschirr", "Möbel"] }
+];
+
 /*
     Jede Person hat:
     Name
     Beruf
-    Produkt
-    Bedürfnis
-    Geld
-    Lager
+    Produkt (was sie herstellt)
 */
 const initialPeople = [
-    {
-        name: "Anna",
-        job: "Bauer",
-        product: "Getreide",
-        need: "Brot"
-    },
-    {
-        name: "Ben",
-        job: "Bäcker",
-        product: "Brot",
-        need: "Brot"
-    },
-    {
-        name: "Clara",
-        job: "Schneider",
-        product: "Kleidung",
-        need: "Kleidung"
-    },
-    {
-        name: "David",
-        job: "Schneider",
-        product: "Kleidung",
-        need: "Kleidung"
-    },
-    {
-        name: "Emma",
-        job: "Holzfäller",
-        product: "Holz",
-        need: "Holz"
-    },
-    {
-        name: "Felix",
-        job: "Zimmermann",
-        product: "Möbel",
-        need: "Möbel"
-    },
-    {
-        name: "Greta",
-        job: "Fischer",
-        product: "Fisch",
-        need: "Fisch"
-    },
-    {
-        name: "Hans",
-        job: "Töpfer",
-        product: "Geschirr",
-        need: "Geschirr"
-    },
-    {
-        name: "Ida",
-        job: "Bauer",
-        product: "Getreide",
-        need: "Brot"
-    },
-    {
-        name: "Jonas",
-        job: "Bäcker",
-        product: "Brot",
-        need: "Brot"
-    },
-    {
-        name: "Klara",
-        job: "Fischer",
-        product: "Fisch",
-        need: "Fisch"
-    },
-    {
-        name: "Leo",
-        job: "Schneider",
-        product: "Kleidung",
-        need: "Kleidung"
-    }
+    { name: "Anna", job: "Bauer", product: "Getreide" },
+    { name: "Ben", job: "Bäcker", product: "Brot" },
+    { name: "Clara", job: "Schneider", product: "Kleidung" },
+    { name: "David", job: "Schneider", product: "Kleidung" },
+    { name: "Emma", job: "Holzfäller", product: "Holz" },
+    { name: "Felix", job: "Zimmermann", product: "Möbel" },
+    { name: "Greta", job: "Fischer", product: "Fisch" },
+    { name: "Hans", job: "Töpfer", product: "Geschirr" },
+    { name: "Ida", job: "Bauer", product: "Getreide" },
+    { name: "Jonas", job: "Bäcker", product: "Brot" },
+    { name: "Klara", job: "Fischer", product: "Fisch" },
+    { name: "Leo", job: "Schneider", product: "Kleidung" }
 ];
+
 /*
     ==========================================
     SPIELZUSTAND
     ==========================================
 */
 let state;
-/*
-    Erstellt einen neuen Spielstand
-*/
+
 function createInitialState() {
     return {
         day: 1,
-        salesToday: 0,
+        transactionsToday: 0,
         log: [
             "Das Dorf Sonnenfeld wurde gegründet.",
             "Jeder Bewohner startet mit 100 Münzen."
@@ -327,13 +295,18 @@ function createInitialState() {
                 name: person.name,
                 job: person.job,
                 product: person.product,
-                need: person.need,
                 money: 100,
-                stock: {}
+                stock: {},
+                needsFulfilled: {
+                    "Lebensmittel": false,
+                    "Kleidung": false,
+                    "Haushalt": false
+                }
             };
         })
     };
 }
+
 /*
     ==========================================
     HILFSFUNKTIONEN
@@ -342,6 +315,63 @@ function createInitialState() {
 function formatMoney(value) {
     return Math.round(value).toLocaleString("de-DE") + " ₰";
 }
+
+/*
+    ==========================================
+    ROHSTOFFKAUF (vor Produktion)
+    ==========================================
+*/
+function buyRawMaterials() {
+    state.people.forEach(function(producer) {
+        const neededMaterials = rawMaterials[producer.job] || [];
+        
+        neededMaterials.forEach(function(material) {
+            /* Rohstoff kaufen, wenn nötig */
+            if ((producer.stock[material] || 0) <= 0) {
+                /* Suche Verkäufer */
+                const seller = state.people.find(function(person) {
+                    return (
+                        person.id !== producer.id &&
+                        person.product === material &&
+                        (person.stock[material] || 0) > 0
+                    );
+                });
+                
+                if (seller) {
+                    const price = prices[material];
+                    if (producer.money >= price) {
+                        /* Kauf durchführen */
+                        producer.money -= price;
+                        seller.money += price;
+                        
+                        seller.stock[material]--;
+                        if (!producer.stock[material]) {
+                            producer.stock[material] = 0;
+                        }
+                        producer.stock[material]++;
+                        
+                        state.log.push(
+                            "⚙️  " +
+                            producer.name +
+                            " (" +
+                            producer.job +
+                            ") kauft 1× " +
+                            material +
+                            " von " +
+                            seller.name +
+                            " für " +
+                            price +
+                            " ₰"
+                        );
+                        
+                        state.transactionsToday++;
+                    }
+                }
+            }
+        });
+    });
+}
+
 /*
     ==========================================
     PRODUKTION
@@ -349,138 +379,150 @@ function formatMoney(value) {
 */
 function produceGoods() {
     state.people.forEach(function(person) {
+        const neededMaterials = rawMaterials[person.job] || [];
         const amount = production[person.job] || 0;
+        
+        /* Nur produzieren, wenn alle Rohstoffe vorhanden sind */
+        let canProduce = true;
+        neededMaterials.forEach(function(material) {
+            if ((person.stock[material] || 0) <= 0) {
+                canProduce = false;
+            }
+        });
+        
+        if (!canProduce) {
+            state.log.push(
+                "⛔ " +
+                person.name +
+                " kann nicht produzieren: Rohstoffe fehlen"
+            );
+            return;
+        }
+        
+        /* Rohstoffe verbrauchen */
+        neededMaterials.forEach(function(material) {
+            person.stock[material]--;
+        });
+        
+        /* Produkt herstellen */
         if (!person.stock[person.product]) {
             person.stock[person.product] = 0;
         }
         person.stock[person.product] += amount;
         
-        /* LOG: Produktion tracken */
-        if (amount > 0) {
-            state.log.push(
-                "📦 " +
-                person.name +
-                " (" +
-                person.job +
-                ") produziert " +
-                amount +
-                "× " +
-                person.product
-            );
-        }
+        state.log.push(
+            "📦 " +
+            person.name +
+            " (" +
+            person.job +
+            ") produziert " +
+            amount +
+            "× " +
+            person.product
+        );
     });
 }
+
 /*
     ==========================================
-    KAUF
-    ==========================================
-*/
-function buyProduct(seller, buyer, product) {
-    const price = prices[product];
-    if (price === undefined) {
-        return false;
-    }
-    if ((seller.stock[product] || 0) <= 0) {
-        return false;
-    }
-    if (buyer.money < price) {
-        return false;
-    }
-    /*
-        Geld wechselt den Besitzer
-    */
-    buyer.money -= price;
-    seller.money += price;
-    /*
-        Ware wechselt den Besitzer
-    */
-    seller.stock[product]--;
-    if (!buyer.stock[product]) {
-        buyer.stock[product] = 0;
-    }
-    buyer.stock[product]++;
-    
-    /* LOG: Handel tracken */
-    state.log.push(
-        "💳 " +
-        buyer.name +
-        " kauft 1× " +
-        product +
-        " von " +
-        seller.name +
-        " für " +
-        price +
-        " ₰"
-    );
-    
-    state.salesToday++;
-    return true;
-}
-/*
-    ==========================================
-    KONSUM
+    KONSUM (universelle Bedürfnisse)
     ==========================================
 */
 function consumeGoods() {
     state.people.forEach(function(buyer) {
-        const desiredProduct = buyer.need;
-        if (!desiredProduct) {
-            return;
-        }
-        /*
-            Suche den einzigen Verkäufer
-            dieses Produkts.
-            In dieser ersten Version darf
-            es mehrere Produzenten desselben
-            Produkts geben, aber der Käufer
-            nimmt einfach den ersten verfügbaren.
-        */
-        const seller = state.people.find(function(person) {
-            return (
-                person.id !== buyer.id &&
-                person.product === desiredProduct &&
-                (person.stock[desiredProduct] || 0) > 0
-            );
+        /* Jeder versucht, seine universellen Bedürfnisse zu erfüllen */
+        universalNeeds.forEach(function(need) {
+            /* Schau, ob Bedarf schon erfüllt */
+            if (buyer.needsFulfilled[need.category]) {
+                return;
+            }
+            
+            /* Versuche, eines der optionalen Produkte zu kaufen */
+            let bought = false;
+            need.options.forEach(function(desiredProduct) {
+                if (bought) return;
+                
+                /* Finde Verkäufer */
+                const seller = state.people.find(function(person) {
+                    return (
+                        person.id !== buyer.id &&
+                        person.product === desiredProduct &&
+                        (person.stock[desiredProduct] || 0) > 0
+                    );
+                });
+                
+                if (!seller) return;
+                
+                const price = prices[desiredProduct];
+                if (buyer.money < price) return;
+                
+                /* Kauf durchführen */
+                buyer.money -= price;
+                seller.money += price;
+                seller.stock[desiredProduct]--;
+                
+                if (!buyer.stock[desiredProduct]) {
+                    buyer.stock[desiredProduct] = 0;
+                }
+                buyer.stock[desiredProduct]++;
+                
+                /* Sofort konsumieren */
+                buyer.stock[desiredProduct]--;
+                buyer.needsFulfilled[need.category] = true;
+                
+                state.log.push(
+                    "💳 " +
+                    buyer.name +
+                    " kauft 1× " +
+                    desiredProduct +
+                    " von " +
+                    seller.name +
+                    " für " +
+                    price +
+                    " ₰"
+                );
+                
+                state.transactionsToday++;
+                bought = true;
+            });
         });
-        if (!seller) {
-            return;
-        }
-        /*
-            Kaufen
-        */
-        const success = buyProduct(
-            seller,
-            buyer,
-            desiredProduct
-        );
-        if (!success) {
-            return;
-        }
-        /*
-            Direkt konsumieren
-        */
-        if (buyer.stock[desiredProduct] > 0) {
-            buyer.stock[desiredProduct]--;
-        }
     });
 }
+
 /*
     ==========================================
     EIN TAG
     ==========================================
 */
 function nextDay() {
-    state.salesToday = 0;
+    state.transactionsToday = 0;
+    
+    /* Bedürfnisse zurücksetzen */
+    state.people.forEach(function(person) {
+        person.needsFulfilled = {
+            "Lebensmittel": false,
+            "Kleidung": false,
+            "Haushalt": false
+        };
+    });
+    
     /*
-        1. Produktion
+        1. Rohstoffkauf
+    */
+    buyRawMaterials();
+    
+    /*
+        2. Produktion
     */
     produceGoods();
+    
     /*
-        2. Handel und Konsum
+        3. Konsum (Handel)
     */
     consumeGoods();
+    
     /*
-        3. Statistik
+        4. Statistik
     */
     const totalMoney = state.people.reduce(
         function(sum, person) {
@@ -488,25 +530,22 @@ function nextDay() {
         },
         0
     );
-    /*
-        Ereignis speichern
-    */
+    
     state.log.push(
         "📊 Tag " +
         state.day +
         " beendet: " +
-        state.salesToday +
-        " Verkäufe. " +
+        state.transactionsToday +
+        " Transaktionen. " +
         "Geld im Dorf: " +
         Math.round(totalMoney) +
         " ₰."
     );
-    /*
-        Nächsten Tag starten
-    */
+    
     state.day++;
     render();
 }
+
 /*
     ==========================================
     MARKT DARSTELLEN
@@ -544,6 +583,7 @@ function renderMarket() {
         market.appendChild(row);
     });
 }
+
 /*
     ==========================================
     BEWOHNER DARSTELLEN
@@ -562,6 +602,10 @@ function renderPeople() {
                 return entry[0] + " ×" + entry[1];
             })
             .join(", ");
+        
+        const needsFulfilledCount = Object.values(person.needsFulfilled).filter(Boolean).length;
+        const needsStatus = needsFulfilledCount + "/3";
+        
         row.innerHTML =
             "<td><strong>" +
             person.name +
@@ -579,11 +623,12 @@ function renderPeople() {
             (stockText || "–") +
             "</td>" +
             "<td>" +
-            person.need +
+            needsStatus +
             "</td>";
         tbody.appendChild(row);
     });
 }
+
 /*
     ==========================================
     PROTOKOLL
@@ -601,7 +646,9 @@ function renderLog() {
             entry.className = "log-entry";
             
             /* Farbcodierung */
-            if (message.startsWith("📦")) {
+            if (message.startsWith("⚙️")) {
+                entry.className += " rawmaterial";
+            } else if (message.startsWith("📦")) {
                 entry.className += " production";
             } else if (message.startsWith("💳")) {
                 entry.className += " trade";
@@ -613,6 +660,7 @@ function renderLog() {
             log.appendChild(entry);
         });
 }
+
 /*
     ==========================================
     GESAMTE UI AKTUALISIEREN
@@ -632,11 +680,12 @@ function render() {
     document.getElementById("money").textContent =
         formatMoney(totalMoney);
     document.getElementById("sales").textContent =
-        state.salesToday;
+        state.transactionsToday;
     renderMarket();
     renderPeople();
     renderLog();
 }
+
 /*
     ==========================================
     BUTTONS
@@ -653,6 +702,7 @@ document
         state = createInitialState();
         render();
     });
+
 /*
     ==========================================
     START
