@@ -408,6 +408,7 @@ function consumeGoods() {
                 const seller = state.people.find(function(person) {
                     return (
                         person.id !== buyer.id &&
+                        productionRecipes[person.job].output === desiredProduct &&
                         (person.stock[desiredProduct] || 0) > 0
                     );
                 });
