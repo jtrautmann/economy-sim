@@ -306,6 +306,7 @@ function buyRawMaterials() {
                     const seller = state.people.find(function(person) {
                         return (
                             person.id !== producer.id &&
+                            productionRecipes[person.job].output === material &&
                             (person.stock[material] || 0) > 0
                         );
                     });
