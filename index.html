@@ -493,7 +493,7 @@ function renderLog() {
     state.log
         .slice()
         .reverse()
-        .slice(0, 30)
+        .slice(0, 200)
         .forEach(function(message) {
             const entry = document.createElement("div");
             entry.className = "log-entry";
