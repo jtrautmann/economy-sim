@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Dorfwirtschaft">
 <title>Dorfwirtschaft – Prototyp</title>
+<script src="https://cdn.plot.ly/plotly-2.29.1.min.js"></script>
 <style>
     * { box-sizing: border-box; }
     body {
@@ -113,6 +114,7 @@
         color: #9ca3af;
         font-style: italic;
     }
+    .plot { min-height: 260px; }
     @media (min-width: 600px) {
         .stats { grid-template-columns: repeat(4, 1fr); }
     }
@@ -150,6 +152,17 @@
         <h2 class="section-title">🛒 Markt</h2>
         <p class="muted">Verfügbare Waren auf dem Markt</p>
         <div id="market"></div>
+    </div>
+    <br>
+
+    <!-- Tagesverlauf / Graphs (neu) -->
+    <div class="card">
+        <h2 class="section-title">📈 Tagesverlauf</h2>
+        <p class="muted">Bestandsverlauf pro Produkt im Tagesverlauf; Balken zeigen Tages‑Totals (produziert / verkauft / konsumiert).</p>
+        <div id="dayGraphs">
+            <div id="inventoryPlot" class="plot"></div>
+            <div id="totalsPlot" style="height:180px;"></div>
+        </div>
     </div>
     <br>
 
@@ -242,6 +255,8 @@ const initialStarterInventory = {
 };
 
 let state;
+// helper variables for recording the day's events/snapshots
+let __dayEventCounter = 0;
 
 function createInitialState() {
     return {
@@ -271,7 +286,9 @@ function createInitialState() {
                     "Haushalt": false
                 }
             };
-        })
+        }),
+        // persistent history of days (optional)
+        history: []
     };
 }
 
@@ -288,6 +305,112 @@ function getStockText(stock) {
             return entry[0] + " ×" + entry[1];
         })
         .join(", ");
+}
+
+function computeMarketInventoryTotals() {
+    const inventory = {};
+    state.people.forEach(function(person) {
+        Object.keys(person.stock).forEach(function(product) {
+            const amount = person.stock[product];
+            if (amount > 0) {
+                if (!inventory[product]) inventory[product] = 0;
+                inventory[product] += amount;
+            }
+        });
+    });
+    return inventory;
+}
+
+function startDayRecording() {
+    __dayEventCounter = 0;
+    state._dayEvents = []; // structured events for this day
+    state._daySamples = []; // snapshots of market inventory after each event
+    // push initial snapshot (eventIndex 0)
+    const inv0 = computeMarketInventoryTotals();
+    state._daySamples.push({ idx: 0, inventory: Object.assign({}, inv0) });
+}
+
+function recordEvent(type, product, qty) {
+    __dayEventCounter++;
+    const idx = __dayEventCounter;
+    state._dayEvents.push({ idx: idx, event: type, product: product, qty: qty });
+    const inv = computeMarketInventoryTotals();
+    state._daySamples.push({ idx: idx, inventory: Object.assign({}, inv) });
+}
+
+function endDayRecording() {
+    // compute per-product totals produced/sold/consumed for the day
+    const totals = {};
+    state._dayEvents.forEach(function(e) {
+        if (!totals[e.product]) totals[e.product] = { produced: 0, sold: 0, consumed: 0 };
+        if (e.event === 'produce') totals[e.product].produced += e.qty;
+        if (e.event === 'sell') totals[e.product].sold += e.qty;
+        if (e.event === 'consume') totals[e.product].consumed += e.qty;
+    });
+    state._lastDayTotals = totals;
+    // keep history (optional)
+    state.history.push({ day: state.day, events: state._dayEvents.slice(), samples: state._daySamples.slice(), totals: totals });
+    renderDayGraphs();
+}
+
+function renderDayGraphs() {
+    const samples = state._daySamples || [];
+    const totals = state._lastDayTotals || {};
+    const inventoryDiv = document.getElementById('inventoryPlot');
+    const totalsDiv = document.getElementById('totalsPlot');
+    inventoryDiv.innerHTML = '';
+    totalsDiv.innerHTML = '';
+
+    if (samples.length === 0) {
+        inventoryDiv.textContent = 'Keine Daten für den Tag.';
+        totalsDiv.textContent = '';
+        return;
+    }
+
+    // collect all products seen in samples or totals
+    const productsSet = new Set();
+    samples.forEach(s => Object.keys(s.inventory || {}).forEach(p => productsSet.add(p)));
+    Object.keys(totals).forEach(p => productsSet.add(p));
+    const products = Array.from(productsSet).sort();
+
+    // x axis: event idx (0..N). show as simple numbers or convert to time-of-day if preferred.
+    const x = samples.map(s => s.idx);
+
+    const traces = products.map(p => {
+        const y = samples.map(s => (s.inventory[p] != null ? s.inventory[p] : 0));
+        return {
+            x: x,
+            y: y,
+            mode: 'lines+markers',
+            name: p
+        };
+    });
+
+    const layoutInv = {
+        title: `Tag ${state.day} — Bestandsverlauf (Ereignisindex)` ,
+        xaxis: { title: 'Ereignisindex (0 = Tagesbeginn)' },
+        yaxis: { title: 'Menge' },
+        legend: { orientation: 'h' }
+    };
+    Plotly.newPlot(inventoryDiv, traces, layoutInv, {responsive: true});
+
+    // totals bar chart
+    const prodNames = Object.keys(totals).sort();
+    const produced = prodNames.map(p => totals[p].produced || 0);
+    const sold = prodNames.map(p => totals[p].sold || 0);
+    const consumed = prodNames.map(p => totals[p].consumed || 0);
+
+    if (prodNames.length === 0) {
+        totalsDiv.textContent = 'Keine Produktions-/Verkaufs-/Konsumdaten für den Tag.';
+        return;
+    }
+
+    const b1 = { x: prodNames, y: produced, name: 'produziert', type: 'bar', marker: {color: '#2ca02c'} };
+    const b2 = { x: prodNames, y: sold, name: 'verkauft', type: 'bar', marker: {color: '#ff7f0e'} };
+    const b3 = { x: prodNames, y: consumed, name: 'konsumiert', type: 'bar', marker: {color: '#d62728'} };
+
+    const layoutBars = { barmode: 'group', title: `Tag ${state.day} — Tages‑Totals` };
+    Plotly.newPlot(totalsDiv, [b1,b2,b3], layoutBars, {responsive: true});
 }
 
 function buyRawMaterials() {
@@ -337,6 +460,8 @@ function buyRawMaterials() {
                     );
 
                     state.transactionsToday++;
+                    // record structured event and snapshot
+                    recordEvent('sell', material, 1);
                 }
             }
         });
@@ -392,6 +517,8 @@ function produceGoods() {
         state.log.push(
             "📦 " + person.name + " (" + person.job + ") produziert " + outputAmount + "× " + output + " aus " + inputsText
         );
+        // record structured production event and snapshot (quantity = outputAmount)
+        recordEvent('produce', output, outputAmount);
     });
 }
 
@@ -437,6 +564,9 @@ function consumeGoods() {
                 buyer.needsFulfilled[need.category] = true;
                 state.transactionsToday++;
                 bought = true;
+                // record structured sell + consume event; treat as sell then consume
+                recordEvent('sell', desiredProduct, 1);
+                recordEvent('consume', desiredProduct, 1);
             });
         });
     });
@@ -456,6 +586,9 @@ function nextDay() {
 
     state.log.push("--- TAG " + state.day + " ---");
 
+    // start recording snapshots/events for charts
+    startDayRecording();
+
     buyRawMaterials();
     produceGoods();
     consumeGoods();
@@ -471,22 +604,16 @@ function nextDay() {
         "📊 Tag " + state.day + " beendet: " + state.totalProducedToday + " produziert, " + state.transactionsToday + " Transaktionen. Geld: " + Math.round(totalMoney) + " ₰."
     );
 
+    // finalize day recording and render graphs
+    endDayRecording();
+
     state.day++;
     render();
 }
 
 function renderMarket() {
     const market = document.getElementById("market");
-    const inventory = {};
-    state.people.forEach(function(person) {
-        Object.keys(person.stock).forEach(function(product) {
-            const amount = person.stock[product];
-            if (amount > 0) {
-                if (!inventory[product]) inventory[product] = 0;
-                inventory[product] += amount;
-            }
-        });
-    });
+    const inventory = computeMarketInventoryTotals();
 
     market.innerHTML = "";
     Object.keys(prices).forEach(function(product) {
@@ -610,6 +737,8 @@ function render() {
     renderPeople();
     renderLog();
     renderRecipes();
+    // render day graphs for last recorded day (if any)
+    renderDayGraphs();
 }
 
 document.getElementById("nextDay").addEventListener("click", function() {
