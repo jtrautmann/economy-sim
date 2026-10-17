@@ -12,34 +12,34 @@
     * { box-sizing: border-box; }
     body {
         margin: 0;
-        padding: 16px;
+        padding: 12px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: #f2f2f7;
         color: #1c1c1e;
     }
-    .container { max-width: 900px; margin: 0 auto; }
+    .container { max-width: 980px; margin: 0 auto; }
     h1 { margin-bottom: 4px; }
     .subtitle { color: #6e6e73; margin-top: 0; }
     .stats {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
-        margin: 20px 0;
+        margin: 16px 0;
     }
     .card {
         background: white;
         border-radius: 14px;
-        padding: 16px;
+        padding: 12px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
-    .stat-label { color: #6e6e73; font-size: 14px; }
-    .stat-value { font-size: 26px; font-weight: 700; margin-top: 4px; }
+    .stat-label { color: #6e6e73; font-size: 13px; }
+    .stat-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
     button {
         appearance: none;
         border: none;
         border-radius: 12px;
-        padding: 13px 18px;
-        font-size: 16px;
+        padding: 11px 16px;
+        font-size: 15px;
         font-weight: 600;
         background: #007aff;
         color: white;
@@ -53,13 +53,13 @@
     .row {
         display: flex;
         justify-content: space-between;
-        padding: 10px 0;
+        padding: 8px 0;
         border-bottom: 1px solid #e5e5ea;
     }
     .row:last-child { border-bottom: none; }
     .muted { color: #6e6e73; }
     .log {
-        max-height: 250px;
+        max-height: 260px;
         overflow-y: auto;
         font-size: 14px;
     }
@@ -81,42 +81,51 @@
     }
     th, td {
         text-align: left;
-        padding: 9px 8px;
+        padding: 8px 6px;
         border-bottom: 1px solid #e5e5ea;
         white-space: nowrap;
     }
     th { color: #6e6e73; }
     .recipe-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
     }
     .recipe-card {
         background: #f9f9fb;
         border-radius: 10px;
-        padding: 12px;
+        padding: 10px;
         border-left: 4px solid #007aff;
     }
     .recipe-output {
         font-weight: 700;
-        font-size: 16px;
-        margin-bottom: 8px;
+        font-size: 15px;
+        margin-bottom: 6px;
         color: #34c759;
     }
-    .recipe-inputs {
-        font-size: 13px;
-        color: #6e6e73;
+    .recipe-inputs { font-size: 13px; color: #6e6e73; }
+    .recipe-input-item { padding: 3px 0; }
+    .recipe-raw { color: #9ca3af; font-style: italic; }
+
+    /* charts */
+    #dayGraphs { display: grid; gap: 10px; }
+    .plot { min-height: 220px; }
+
+    /* responsive mobile optimizations */
+    @media (max-width: 600px) {
+        body { padding: 10px; }
+        .container { padding: 0 6px; }
+        h1 { font-size: 20px; }
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .stat-value { font-size: 18px; }
+        .log { max-height: 200px; }
+        .plot { min-height: 200px; }
+        /* stack charts vertically and reduce margins */
+        #dayGraphs { grid-template-columns: 1fr; }
     }
-    .recipe-input-item {
-        padding: 3px 0;
-    }
-    .recipe-raw {
-        color: #9ca3af;
-        font-style: italic;
-    }
-    .plot { min-height: 260px; }
-    @media (min-width: 600px) {
-        .stats { grid-template-columns: repeat(4, 1fr); }
+
+    @media (min-width: 601px) {
+        #dayGraphs { grid-template-columns: 1fr; }
     }
 </style>
 </head>
@@ -155,13 +164,18 @@
     </div>
     <br>
 
-    <!-- Tagesverlauf / Graphs (neu) -->
+    <!-- Tagesverlauf / Graphs (über Tage) -->
     <div class="card">
-        <h2 class="section-title">📈 Tagesverlauf</h2>
-        <p class="muted">Bestandsverlauf pro Produkt im Tagesverlauf; Balken zeigen Tages‑Totals (produziert / verkauft / konsumiert).</p>
+        <h2 class="section-title">📈 Verlauf über Tage</h2>
+        <p class="muted">X‑Achse: Tage (jeder Eintrag = ein abgeschlossener Tag). Wähle ein Produkt für Tages‑Totals.</p>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+            <label for="productFilter" class="muted">Produkt:</label>
+            <select id="productFilter" style="min-width:160px;padding:6px;border-radius:8px;border:1px solid #e5e5ea;"></select>
+            <button id="showAll" class="secondary">Alle Produkte</button>
+        </div>
         <div id="dayGraphs">
             <div id="inventoryPlot" class="plot"></div>
-            <div id="totalsPlot" style="height:180px;"></div>
+            <div id="totalsPlot" class="plot"></div>
         </div>
     </div>
     <br>
@@ -255,7 +269,6 @@ const initialStarterInventory = {
 };
 
 let state;
-// helper variables for recording the day's events/snapshots
 let __dayEventCounter = 0;
 
 function createInitialState() {
@@ -270,41 +283,23 @@ function createInitialState() {
         people: initialPeople.map(function(person, index) {
             const stock = {};
             const starter = initialStarterInventory[person.name] || {};
-            Object.keys(starter).forEach(function(item) {
-                stock[item] = starter[item];
-            });
-
+            Object.keys(starter).forEach(function(item) { stock[item] = starter[item]; });
             return {
                 id: index,
                 name: person.name,
                 job: person.job,
                 money: 100,
                 stock: stock,
-                needsFulfilled: {
-                    "Lebensmittel": false,
-                    "Kleidung": false,
-                    "Haushalt": false
-                }
+                needsFulfilled: { "Lebensmittel": false, "Kleidung": false, "Haushalt": false }
             };
         }),
-        // persistent history of days (optional)
         history: []
     };
 }
 
-function formatMoney(value) {
-    return Math.round(value).toLocaleString("de-DE") + " ₰";
-}
-
+function formatMoney(value) { return Math.round(value).toLocaleString("de-DE") + " ₰"; }
 function getStockText(stock) {
-    return Object.entries(stock)
-        .filter(function(entry) {
-            return entry[1] > 0;
-        })
-        .map(function(entry) {
-            return entry[0] + " ×" + entry[1];
-        })
-        .join(", ");
+    return Object.entries(stock).filter(e => e[1] > 0).map(e => e[0] + " ×" + e[1]).join(", ");
 }
 
 function computeMarketInventoryTotals() {
@@ -312,10 +307,7 @@ function computeMarketInventoryTotals() {
     state.people.forEach(function(person) {
         Object.keys(person.stock).forEach(function(product) {
             const amount = person.stock[product];
-            if (amount > 0) {
-                if (!inventory[product]) inventory[product] = 0;
-                inventory[product] += amount;
-            }
+            if (amount > 0) { inventory[product] = (inventory[product] || 0) + amount; }
         });
     });
     return inventory;
@@ -323,9 +315,8 @@ function computeMarketInventoryTotals() {
 
 function startDayRecording() {
     __dayEventCounter = 0;
-    state._dayEvents = []; // structured events for this day
-    state._daySamples = []; // snapshots of market inventory after each event
-    // push initial snapshot (eventIndex 0)
+    state._dayEvents = [];
+    state._daySamples = [];
     const inv0 = computeMarketInventoryTotals();
     state._daySamples.push({ idx: 0, inventory: Object.assign({}, inv0) });
 }
@@ -339,7 +330,6 @@ function recordEvent(type, product, qty) {
 }
 
 function endDayRecording() {
-    // compute per-product totals produced/sold/consumed for the day
     const totals = {};
     state._dayEvents.forEach(function(e) {
         if (!totals[e.product]) totals[e.product] = { produced: 0, sold: 0, consumed: 0 };
@@ -348,69 +338,103 @@ function endDayRecording() {
         if (e.event === 'consume') totals[e.product].consumed += e.qty;
     });
     state._lastDayTotals = totals;
-    // keep history (optional)
+    // store history: day number, events, samples, totals
     state.history.push({ day: state.day, events: state._dayEvents.slice(), samples: state._daySamples.slice(), totals: totals });
     renderDayGraphs();
 }
 
+function allProducts() {
+    // union of known products (prices + recipe outputs)
+    const p = new Set(Object.keys(prices));
+    Object.keys(productionRecipes).forEach(job => p.add(productionRecipes[job].output));
+    // also ensure any product that appears in market/inventory is included
+    state.people.forEach(person => Object.keys(person.stock).forEach(k => p.add(k)));
+    return Array.from(p).sort();
+}
+
+function populateProductFilter() {
+    const sel = document.getElementById('productFilter');
+    sel.innerHTML = '';
+    const prod = allProducts();
+    const allOpt = document.createElement('option'); allOpt.value = 'all'; allOpt.textContent = 'Alle Produkte'; sel.appendChild(allOpt);
+    prod.forEach(pr => { const o = document.createElement('option'); o.value = pr; o.textContent = pr; sel.appendChild(o); });
+}
+
 function renderDayGraphs() {
-    const samples = state._daySamples || [];
-    const totals = state._lastDayTotals || {};
+    const history = state.history || [];
     const inventoryDiv = document.getElementById('inventoryPlot');
     const totalsDiv = document.getElementById('totalsPlot');
     inventoryDiv.innerHTML = '';
     totalsDiv.innerHTML = '';
 
-    if (samples.length === 0) {
-        inventoryDiv.textContent = 'Keine Daten für den Tag.';
+    if (history.length === 0) {
+        inventoryDiv.textContent = 'Noch keine abgeschlossenen Tage.';
         totalsDiv.textContent = '';
         return;
     }
 
-    // collect all products seen in samples or totals
-    const productsSet = new Set();
-    samples.forEach(s => Object.keys(s.inventory || {}).forEach(p => productsSet.add(p)));
-    Object.keys(totals).forEach(p => productsSet.add(p));
-    const products = Array.from(productsSet).sort();
+    const days = history.map(h => h.day);
+    const products = allProducts();
+    const selected = document.getElementById('productFilter').value || 'all';
 
-    // x axis: event idx (0..N). show as simple numbers or convert to time-of-day if preferred.
-    const x = samples.map(s => s.idx);
+    // compute end-of-day inventory per product per day
+    const inventoryByProduct = {};
+    products.forEach(p => inventoryByProduct[p] = history.map(h => {
+        const lastSample = (h.samples && h.samples.length) ? h.samples[h.samples.length-1].inventory : {};
+        return lastSample[p] != null ? lastSample[p] : 0;
+    }));
 
-    const traces = products.map(p => {
-        const y = samples.map(s => (s.inventory[p] != null ? s.inventory[p] : 0));
-        return {
-            x: x,
-            y: y,
-            mode: 'lines+markers',
-            name: p
-        };
-    });
-
-    const layoutInv = {
-        title: `Tag ${state.day} — Bestandsverlauf (Ereignisindex)` ,
-        xaxis: { title: 'Ereignisindex (0 = Tagesbeginn)' },
-        yaxis: { title: 'Menge' },
-        legend: { orientation: 'h' }
-    };
-    Plotly.newPlot(inventoryDiv, traces, layoutInv, {responsive: true});
-
-    // totals bar chart
-    const prodNames = Object.keys(totals).sort();
-    const produced = prodNames.map(p => totals[p].produced || 0);
-    const sold = prodNames.map(p => totals[p].sold || 0);
-    const consumed = prodNames.map(p => totals[p].consumed || 0);
-
-    if (prodNames.length === 0) {
-        totalsDiv.textContent = 'Keine Produktions-/Verkaufs-/Konsumdaten für den Tag.';
-        return;
+    // traces: either all products (multiple lines) or single product
+    const width = Math.max(document.documentElement.clientWidth || 320, 320);
+    const isMobile = width <= 600;
+    const traces = [];
+    if (selected === 'all') {
+        products.forEach(p => {
+            traces.push({ x: days, y: inventoryByProduct[p], mode: 'lines+markers', name: p, line: { width: isMobile ? 2 : 3 } });
+        });
+    } else {
+        traces.push({ x: days, y: inventoryByProduct[selected], mode: 'lines+markers', name: selected, line: { width: 3 } });
     }
 
-    const b1 = { x: prodNames, y: produced, name: 'produziert', type: 'bar', marker: {color: '#2ca02c'} };
-    const b2 = { x: prodNames, y: sold, name: 'verkauft', type: 'bar', marker: {color: '#ff7f0e'} };
-    const b3 = { x: prodNames, y: consumed, name: 'konsumiert', type: 'bar', marker: {color: '#d62728'} };
+    const layoutInv = {
+        title: `Bestand am Tagesende über Zeit`,
+        xaxis: { title: 'Tag', tickmode: 'linear' },
+        yaxis: { title: 'Menge' },
+        legend: { orientation: isMobile ? 'h' : 'h' },
+        margin: { t: 40, b: 40 },
+        font: { size: isMobile ? 11 : 12 }
+    };
+    const config = { responsive: true, displayModeBar: !isMobile };
+    Plotly.newPlot(inventoryDiv, traces, layoutInv, config);
 
-    const layoutBars = { barmode: 'group', title: `Tag ${state.day} — Tages‑Totals` };
-    Plotly.newPlot(totalsDiv, [b1,b2,b3], layoutBars, {responsive: true});
+    // totals for bar chart: for selected product show produced/sold/consumed per day
+    let x = days;
+    let producedArr = [], soldArr = [], consumedArr = [];
+    if (selected === 'all') {
+        // sum across products for each day
+        history.forEach(h => {
+            let pSum = 0, sSum = 0, cSum = 0;
+            Object.keys(h.totals || {}).forEach(p => {
+                pSum += (h.totals[p].produced || 0);
+                sSum += (h.totals[p].sold || 0);
+                cSum += (h.totals[p].consumed || 0);
+            });
+            producedArr.push(pSum); soldArr.push(sSum); consumedArr.push(cSum);
+        });
+    } else {
+        history.forEach(h => {
+            const t = h.totals && h.totals[selected] ? h.totals[selected] : { produced:0,sold:0,consumed:0 };
+            producedArr.push(t.produced || 0);
+            soldArr.push(t.sold || 0);
+            consumedArr.push(t.consumed || 0);
+        });
+    }
+
+    const b1 = { x: x, y: producedArr, name: 'produziert', type: 'bar', marker: {color: '#2ca02c'} };
+    const b2 = { x: x, y: soldArr, name: 'verkauft', type: 'bar', marker: {color: '#ff7f0e'} };
+    const b3 = { x: x, y: consumedArr, name: 'konsumiert', type: 'bar', marker: {color: '#d62728'} };
+    const layoutBars = { barmode: 'group', title: selected === 'all' ? 'Tages‑Totals (alle Produkte)' : `Tages‑Totals — ${selected}`, xaxis: { title: 'Tag' }, margin:{t:40}, font:{size:isMobile?11:12} };
+    Plotly.newPlot(totalsDiv, [b1,b2,b3], layoutBars, config);
 }
 
 function buyRawMaterials() {
@@ -460,7 +484,6 @@ function buyRawMaterials() {
                     );
 
                     state.transactionsToday++;
-                    // record structured event and snapshot
                     recordEvent('sell', material, 1);
                 }
             }
@@ -478,46 +501,21 @@ function produceGoods() {
 
         Object.keys(requiredInputs).forEach(function(material) {
             const available = person.stock[material] || 0;
-            if (available < requiredInputs[material]) {
-                canProduce = false;
-            }
+            if (available < requiredInputs[material]) { canProduce = false; }
         });
 
         if (!canProduce) {
-            const missingItems = Object.keys(requiredInputs)
-                .filter(function(material) {
-                    return (person.stock[material] || 0) < requiredInputs[material];
-                })
-                .map(function(material) {
-                    return material + " ×" + requiredInputs[material];
-                })
-                .join(", ");
-
-            state.log.push(
-                "⛔ " + person.name + " (" + person.job + ") kann nicht produzieren: " + missingItems + " fehlt"
-            );
+            const missingItems = Object.keys(requiredInputs).filter(function(material) { return (person.stock[material] || 0) < requiredInputs[material]; }).map(function(material) { return material + " ×" + requiredInputs[material]; }).join(", ");
+            state.log.push("⛔ " + person.name + " (" + person.job + ") kann nicht produzieren: " + missingItems + " fehlt");
             return;
         }
 
-        Object.keys(requiredInputs).forEach(function(material) {
-            person.stock[material] -= requiredInputs[material];
-        });
-
-        const output = recipe.output;
-        const outputAmount = recipe.outputAmount;
+        Object.keys(requiredInputs).forEach(function(material) { person.stock[material] -= requiredInputs[material]; });
+        const output = recipe.output; const outputAmount = recipe.outputAmount;
         person.stock[output] = (person.stock[output] || 0) + outputAmount;
         state.totalProducedToday += outputAmount;
-
-        const inputsText = Object.keys(requiredInputs).length > 0
-            ? Object.keys(requiredInputs)
-                .map(function(m) { return m + " ×" + requiredInputs[m]; })
-                .join(" + ")
-            : "ohne Rohstoffe";
-
-        state.log.push(
-            "📦 " + person.name + " (" + person.job + ") produziert " + outputAmount + "× " + output + " aus " + inputsText
-        );
-        // record structured production event and snapshot (quantity = outputAmount)
+        const inputsText = Object.keys(requiredInputs).length > 0 ? Object.keys(requiredInputs).map(function(m) { return m + " ×" + requiredInputs[m]; }).join(" + ") : "ohne Rohstoffe";
+        state.log.push("📦 " + person.name + " (" + person.job + ") produziert " + outputAmount + "× " + output + " aus " + inputsText);
         recordEvent('produce', output, outputAmount);
     });
 }
@@ -525,232 +523,60 @@ function produceGoods() {
 function consumeGoods() {
     state.people.forEach(function(buyer) {
         universalNeeds.forEach(function(need) {
-            if (buyer.needsFulfilled[need.category]) {
-                return;
-            }
-
+            if (buyer.needsFulfilled[need.category]) return;
             let bought = false;
             need.options.forEach(function(desiredProduct) {
                 if (bought) return;
-
-                const seller = state.people.find(function(person) {
-                    return (
-                        person.id !== buyer.id &&
-                        productionRecipes[person.job].output === desiredProduct &&
-                        (person.stock[desiredProduct] || 0) > 0
-                    );
-                });
-
+                const seller = state.people.find(function(person) { return ( person.id !== buyer.id && productionRecipes[person.job].output === desiredProduct && (person.stock[desiredProduct] || 0) > 0 ); });
                 if (!seller) return;
-
-                const price = prices[desiredProduct];
-                if (buyer.money < price) return;
-
-                buyer.money -= price;
-                seller.money += price;
-                seller.stock[desiredProduct] = (seller.stock[desiredProduct] || 0) - 1;
-                buyer.stock[desiredProduct] = (buyer.stock[desiredProduct] || 0) + 1;
-
-                state.log.push(
-                    "💳 " + buyer.name + " kauft 1× " + desiredProduct + " von " + seller.name + " für " + price + " ₰"
-                );
-
+                const price = prices[desiredProduct]; if (buyer.money < price) return;
+                buyer.money -= price; seller.money += price; seller.stock[desiredProduct] = (seller.stock[desiredProduct] || 0) - 1; buyer.stock[desiredProduct] = (buyer.stock[desiredProduct] || 0) + 1;
+                state.log.push("💳 " + buyer.name + " kauft 1× " + desiredProduct + " von " + seller.name + " für " + price + " ₰");
                 buyer.stock[desiredProduct] = (buyer.stock[desiredProduct] || 0) - 1;
-
-                state.log.push(
-                    "🍽️  " + buyer.name + " verbraucht 1× " + desiredProduct
-                );
-
-                buyer.needsFulfilled[need.category] = true;
-                state.transactionsToday++;
-                bought = true;
-                // record structured sell + consume event; treat as sell then consume
-                recordEvent('sell', desiredProduct, 1);
-                recordEvent('consume', desiredProduct, 1);
+                state.log.push("🍽️  " + buyer.name + " verbraucht 1× " + desiredProduct);
+                buyer.needsFulfilled[need.category] = true; state.transactionsToday++; bought = true;
+                recordEvent('sell', desiredProduct, 1); recordEvent('consume', desiredProduct, 1);
             });
         });
     });
 }
 
 function nextDay() {
-    state.transactionsToday = 0;
-    state.totalProducedToday = 0;
-
-    state.people.forEach(function(person) {
-        person.needsFulfilled = {
-            "Lebensmittel": false,
-            "Kleidung": false,
-            "Haushalt": false
-        };
-    });
-
+    state.transactionsToday = 0; state.totalProducedToday = 0;
+    state.people.forEach(function(person) { person.needsFulfilled = { "Lebensmittel": false, "Kleidung": false, "Haushalt": false }; });
     state.log.push("--- TAG " + state.day + " ---");
-
-    // start recording snapshots/events for charts
     startDayRecording();
-
-    buyRawMaterials();
-    produceGoods();
-    consumeGoods();
-
-    const totalMoney = state.people.reduce(
-        function(sum, person) {
-            return sum + person.money;
-        },
-        0
-    );
-
-    state.log.push(
-        "📊 Tag " + state.day + " beendet: " + state.totalProducedToday + " produziert, " + state.transactionsToday + " Transaktionen. Geld: " + Math.round(totalMoney) + " ₰."
-    );
-
-    // finalize day recording and render graphs
+    buyRawMaterials(); produceGoods(); consumeGoods();
+    const totalMoney = state.people.reduce((sum, person) => sum + person.money, 0);
+    state.log.push("📊 Tag " + state.day + " beendet: " + state.totalProducedToday + " produziert, " + state.transactionsToday + " Transaktionen. Geld: " + Math.round(totalMoney) + " ₰.");
     endDayRecording();
-
-    state.day++;
-    render();
+    state.day++; render();
 }
 
-function renderMarket() {
-    const market = document.getElementById("market");
-    const inventory = computeMarketInventoryTotals();
+function renderMarket() { const market = document.getElementById("market"); const inventory = computeMarketInventoryTotals(); market.innerHTML = ""; Object.keys(prices).forEach(function(product) { const amount = inventory[product] || 0; if (amount > 0) { const row = document.createElement("div"); row.className = "row"; const name = document.createElement("span"); name.innerHTML = "<strong>" + product + "</strong> <span class=\"muted\">· " + prices[product] + " ₰</span>"; const amountSpan = document.createElement("span"); amountSpan.textContent = amount + " Stück"; row.appendChild(name); row.appendChild(amountSpan); market.appendChild(row); } }); }
 
-    market.innerHTML = "";
-    Object.keys(prices).forEach(function(product) {
-        const amount = inventory[product] || 0;
-        if (amount > 0) {
-            const row = document.createElement("div");
-            row.className = "row";
-            const name = document.createElement("span");
-            name.innerHTML = "<strong>" + product + "</strong> <span class=\"muted\">· " + prices[product] + " ₰</span>";
-            const amountSpan = document.createElement("span");
-            amountSpan.textContent = amount + " Stück";
-            row.appendChild(name);
-            row.appendChild(amountSpan);
-            market.appendChild(row);
-        }
-    });
-}
+function renderRecipes() { const recipesContainer = document.getElementById("recipes"); recipesContainer.innerHTML = ""; const recipes = {}; Object.keys(productionRecipes).forEach(function(job) { const recipe = productionRecipes[job]; if (!recipes[recipe.output]) recipes[recipe.output] = recipe; }); Object.keys(recipes).sort().forEach(function(product) { const recipe = recipes[product]; const card = document.createElement("div"); card.className = "recipe-card"; const outputDiv = document.createElement("div"); outputDiv.className = "recipe-output"; outputDiv.textContent = "🔸 " + recipe.outputAmount + "× " + product; card.appendChild(outputDiv); const inputsDiv = document.createElement("div"); inputsDiv.className = "recipe-inputs"; if (Object.keys(recipe.inputs).length === 0) { const rawItem = document.createElement("div"); rawItem.className = "recipe-input-item recipe-raw"; rawItem.textContent = "(Rohstoff - keine Inputs)"; inputsDiv.appendChild(rawItem); } else { Object.keys(recipe.inputs).forEach(function(input) { const item = document.createElement("div"); item.className = "recipe-input-item"; item.textContent = "→ " + recipe.inputs[input] + "× " + input; inputsDiv.appendChild(item); }); } card.appendChild(inputsDiv); recipesContainer.appendChild(card); }); }
 
-function renderRecipes() {
-    const recipesContainer = document.getElementById("recipes");
-    recipesContainer.innerHTML = "";
-    
-    const recipes = {};
-    Object.keys(productionRecipes).forEach(function(job) {
-        const recipe = productionRecipes[job];
-        if (!recipes[recipe.output]) {
-            recipes[recipe.output] = recipe;
-        }
-    });
-    
-    Object.keys(recipes).sort().forEach(function(product) {
-        const recipe = recipes[product];
-        const card = document.createElement("div");
-        card.className = "recipe-card";
-        
-        const outputDiv = document.createElement("div");
-        outputDiv.className = "recipe-output";
-        outputDiv.textContent = "🔸 " + recipe.outputAmount + "× " + product;
-        card.appendChild(outputDiv);
-        
-        const inputsDiv = document.createElement("div");
-        inputsDiv.className = "recipe-inputs";
-        
-        if (Object.keys(recipe.inputs).length === 0) {
-            const rawItem = document.createElement("div");
-            rawItem.className = "recipe-input-item recipe-raw";
-            rawItem.textContent = "(Rohstoff - keine Inputs)";
-            inputsDiv.appendChild(rawItem);
-        } else {
-            Object.keys(recipe.inputs).forEach(function(input) {
-                const item = document.createElement("div");
-                item.className = "recipe-input-item";
-                item.textContent = "→ " + recipe.inputs[input] + "× " + input;
-                inputsDiv.appendChild(item);
-            });
-        }
-        
-        card.appendChild(inputsDiv);
-        recipesContainer.appendChild(card);
-    });
-}
+function renderPeople() { const tbody = document.getElementById("people"); tbody.innerHTML = ""; state.people.forEach(function(person) { const row = document.createElement("tr"); const stockText = getStockText(person.stock); const needsFulfilledCount = Object.values(person.needsFulfilled).filter(Boolean).length; const needsStatus = needsFulfilledCount + "/3"; row.innerHTML = "<td><strong>" + person.name + "</strong></td>" + "<td>" + person.job + "</td>" + "<td>" + formatMoney(person.money) + "</td>" + "<td style='font-size: 12px;'>" + (stockText || "–") + "</td>" + "<td>" + needsStatus + "</td>"; tbody.appendChild(row); }); }
 
-function renderPeople() {
-    const tbody = document.getElementById("people");
-    tbody.innerHTML = "";
-    state.people.forEach(function(person) {
-        const row = document.createElement("tr");
-        const stockText = getStockText(person.stock);
-        const needsFulfilledCount = Object.values(person.needsFulfilled).filter(Boolean).length;
-        const needsStatus = needsFulfilledCount + "/3";
-
-        row.innerHTML =
-            "<td><strong>" + person.name + "</strong></td>" +
-            "<td>" + person.job + "</td>" +
-            "<td>" + formatMoney(person.money) + "</td>" +
-            "<td style='font-size: 12px;'>" + (stockText || "–") + "</td>" +
-            "<td>" + needsStatus + "</td>";
-        tbody.appendChild(row);
-    });
-}
-
-function renderLog() {
-    const log = document.getElementById("log");
-    log.innerHTML = "";
-    state.log
-        .slice()
-        .reverse()
-        .slice(0, 200)
-        .forEach(function(message) {
-            const entry = document.createElement("div");
-            entry.className = "log-entry";
-
-            if (message.startsWith("⚙️")) {
-                entry.className += " rawmaterial";
-            } else if (message.startsWith("📦")) {
-                entry.className += " production";
-            } else if (message.startsWith("🍽️")) {
-                entry.className += " consumption";
-            } else if (message.startsWith("💳")) {
-                entry.className += " trade";
-            } else if (message.startsWith("⛔") || message.startsWith("❌") || message.startsWith("💸")) {
-                entry.className += " error";
-            } else if (message.startsWith("📊") || message.startsWith("---")) {
-                entry.className += " summary";
-            }
-
-            entry.textContent = message;
-            log.appendChild(entry);
-        });
-}
+function renderLog() { const log = document.getElementById("log"); log.innerHTML = ""; state.log.slice().reverse().slice(0,200).forEach(function(message) { const entry = document.createElement("div"); entry.className = "log-entry"; if (message.startsWith("⚙️")) entry.className += " rawmaterial"; else if (message.startsWith("📦")) entry.className += " production"; else if (message.startsWith("🍽️")) entry.className += " consumption"; else if (message.startsWith("💳")) entry.className += " trade"; else if (message.startsWith("⛔") || message.startsWith("❌") || message.startsWith("💸")) entry.className += " error"; else if (message.startsWith("📊") || message.startsWith("---")) entry.className += " summary"; entry.textContent = message; log.appendChild(entry); }); }
 
 function render() {
     document.getElementById("day").textContent = state.day;
     document.getElementById("population").textContent = state.people.length;
-    const totalMoney = state.people.reduce(function(sum, person) {
-        return sum + person.money;
-    }, 0);
+    const totalMoney = state.people.reduce((sum, person) => sum + person.money, 0);
     document.getElementById("money").textContent = formatMoney(totalMoney);
     document.getElementById("sales").textContent = state.transactionsToday;
-    renderMarket();
-    renderPeople();
-    renderLog();
-    renderRecipes();
-    // render day graphs for last recorded day (if any)
-    renderDayGraphs();
+    renderMarket(); renderPeople(); renderLog(); renderRecipes(); populateProductFilter(); renderDayGraphs();
 }
 
-document.getElementById("nextDay").addEventListener("click", function() {
-    nextDay();
-});
-document.getElementById("reset").addEventListener("click", function() {
-    state = createInitialState();
-    render();
-});
+// wiring
+document.getElementById("nextDay").addEventListener("click", function() { nextDay(); });
+document.getElementById("reset").addEventListener("click", function() { state = createInitialState(); render(); });
+document.getElementById('productFilter').addEventListener('change', function(){ renderDayGraphs(); });
+document.getElementById('showAll').addEventListener('click', function(){ document.getElementById('productFilter').value = 'all'; renderDayGraphs(); });
 
-state = createInitialState();
-render();
+state = createInitialState(); render();
 </script>
 </body>
 </html>
